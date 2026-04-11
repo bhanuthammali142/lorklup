@@ -27,8 +27,11 @@ import {
   StudentDashboard,
   StudentFees,
   StudentComplaints,
+  StudentAnnouncements,
+  StudentFoodMenu,
   StudentProfile,
 } from './student/pages/index'
+
 
 /**
  * App Router — Strict role-based routing.
@@ -76,13 +79,16 @@ function App() {
           <Route element={<StudentRoute />}>
             <Route path="/student" element={<StudentLayout />}>
               <Route index element={<Navigate to="dashboard" replace />} />
-              <Route path="dashboard" element={<StudentDashboard />} />
-              <Route path="fees" element={<StudentFees />} />
-              <Route path="complaints" element={<StudentComplaints />} />
-              <Route path="profile" element={<StudentProfile />} />
-              <Route path="*" element={<Navigate to="dashboard" replace />} />
+              <Route path="dashboard"     element={<StudentDashboard />} />
+              <Route path="fees"          element={<StudentFees />} />
+              <Route path="complaints"    element={<StudentComplaints />} />
+              <Route path="announcements" element={<StudentAnnouncements />} />
+              <Route path="food"          element={<StudentFoodMenu />} />
+              <Route path="profile"       element={<StudentProfile />} />
+              <Route path="*"             element={<Navigate to="dashboard" replace />} />
             </Route>
           </Route>
+
 
           {/* ── Catch-all → auth ─────────────────────────────────────────── */}
           <Route path="/" element={<Navigate to="/auth" replace />} />
