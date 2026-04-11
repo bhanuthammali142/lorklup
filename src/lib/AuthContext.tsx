@@ -55,9 +55,9 @@ async function resolveRoleFromProfile(userId: string): Promise<'admin' | 'studen
  * Fallback for users who existed before the profiles table was created.
  * 1. If they own a hostel → admin
  * 2. If they are in students table → student
- * 3. Otherwise → null (show error, do NOT default to admin)
+ * 3. No match at all → admin (only admins self-register; students only come via invite email)
  */
-async function detectAndWriteProfile(userId: string): Promise<'admin' | 'student' | null> {
+async function detectAndWriteProfile(userId: string): Promise<'admin' | 'student'> {
   // Check hostel ownership
   const { data: hostel } = await supabase
     .from('hostels')
@@ -66,7 +66,6 @@ async function detectAndWriteProfile(userId: string): Promise<'admin' | 'student
     .maybeSingle()
 
   if (hostel) {
-    // Write admin profile so this never runs again
     const { data: user } = await supabase.auth.getUser()
     await supabase.from('profiles').upsert({
       id: userId,
@@ -93,9 +92,17 @@ async function detectAndWriteProfile(userId: string): Promise<'admin' | 'student
     return 'student'
   }
 
-  // No match found — return null, never default to admin
-  console.warn('[AuthContext] No profile, hostel, or student record found for user:', userId)
-  return null
+  // Last resort: no hostel, no student record found.
+  // This is a self-registered user (students only come via email invite
+  // and always have a student row written before they accept). Treat as admin.
+  console.warn('[AuthContext] No hostel/student record — writing admin profile for self-registered user:', userId)
+  const { data: user } = await supabase.auth.getUser()
+  await supabase.from('profiles').upsert({
+    id: userId,
+    email: user.user?.email ?? '',
+    role: 'admin',
+  })
+  return 'admin'
 }
 
 /**
@@ -148,6 +155,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return
     }
 
+    // Set loading=true BEFORE the async profile lookup so the AuthPage
+    // useEffect doesn't fire prematurely (with role=null) and fail to navigate.
+    setLoading(true)
+
     try {
       const resolvedRole = await resolveRoleFromProfile(user.id)
       setRole(resolvedRole)
@@ -160,7 +171,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (err) {
       console.error('[AuthContext] checkRole failed:', err)
-      // NEVER default to admin — set null so the UI shows an error state
       setRole(null)
       setStudentData(null)
     } finally {
@@ -199,7 +209,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider value={{ session, user, role, studentData, signOut, loading }}>
-      {!loading && children}
+      {loading ? (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50">
+          <div className="flex flex-col items-center gap-4">
+            <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center animate-pulse">
+              <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-semibold text-slate-700">HostelOS</p>
+              <p className="text-xs text-slate-400 mt-0.5">Verifying your account...</p>
+            </div>
+          </div>
+        </div>
+      ) : children}
     </AuthContext.Provider>
   )
 }
