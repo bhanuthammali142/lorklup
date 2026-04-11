@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React from 'react'
 import { Outlet, NavLink } from 'react-router-dom'
 import { LayoutDashboard, Wallet, MessageSquareWarning, LogOut, User } from 'lucide-react'

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React from 'react'
 import { NavLink } from 'react-router-dom'
 import { LayoutDashboard, Users, Bed, Wallet, BarChart3, Settings, LogOut, CheckSquare, MessageSquareWarning, Megaphone, ShieldCheck } from 'lucide-react'

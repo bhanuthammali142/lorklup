@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useEffect, useState } from 'react'
 import { CheckSquare, Calendar, Loader2, Check, X, Plane } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'

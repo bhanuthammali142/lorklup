@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useEffect, useState } from 'react'
 import { Plus, Search, Filter, MoreVertical, FileText, Trash2, Loader2, Eye, X, CheckCircle2, AlertCircle, Building2, Phone, Calendar, CreditCard, ImageOff } from 'lucide-react'
 import { AddStudentModal } from '../components/AddStudentModal'

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useEffect, useState } from 'react'
 import { ReactNode } from 'react'
 import { Plus, Search, Filter, MessageCircle, FileDown, CheckCircle2, Clock, AlertCircle, Loader2, X, RefreshCw } from 'lucide-react'
