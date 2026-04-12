@@ -1,11 +1,9 @@
 // @ts-nocheck
 import React, { useEffect, useState } from 'react'
 import { Building2, Plus, Search, ShieldCheck, RefreshCw, Eye } from 'lucide-react'
-import { supabaseAdmin } from '../../lib/supabase'
-import { AddHostelModal } from '../components/AddHostelModal'
-import toast from 'react-hot-toast'
+import { listAllHostels } from '../../lib/admin-api'
 
-const supabase = supabaseAdmin // bypass RLS
+import { AddHostelModal } from '../components/AddHostelModal'
 
 export function SuperAdminHostels() {
   const [hostels, setHostels] = useState<any[]>([])
@@ -16,9 +14,10 @@ export function SuperAdminHostels() {
 
   const load = async () => {
     setLoading(true)
-    const { data } = await supabase.from('hostels').select('*').order('created_at', { ascending: false })
-    setHostels(data || [])
-    setFiltered(data || [])
+    const { data } = await listAllHostels()
+    const list = data?.hostels || []
+    setHostels(list)
+    setFiltered(list)
     setLoading(false)
   }
 

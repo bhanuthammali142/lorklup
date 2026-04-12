@@ -5,7 +5,7 @@ import {
   Eye, EyeOff, CheckCircle2, Loader2, ChevronRight, ChevronLeft,
   Copy, Check
 } from 'lucide-react'
-import { supabaseAdmin } from '../../lib/supabase'
+import { createAdminUser, createHostelFull } from '../../lib/admin-api'
 import toast from 'react-hot-toast'
 
 // ── Temp password generator ──────────────────────────────────
@@ -76,114 +76,48 @@ export function AddHostelModal({ onClose, onSuccess }: { onClose: () => void; on
   const handleSubmit = async () => {
     setSubmitting(true)
     try {
-      let ownerId: string
-      let credentialPassword = tempPassword
-      let isExistingUser = false
+      // 1. Create admin user via edge function (service key stays server-side)
+      const { data: adminResult, error: adminErr } = await createAdminUser(
+        ownerEmail,
+        tempPassword,
+        ownerName,
+      )
 
-      // 1. Try to create new auth user. If creation fails for ANY reason
-      //    (email exists, quota, etc.) fall back to finding the existing user.
-      const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
-        email: ownerEmail,
-        password: tempPassword,
-        email_confirm: true,
-        user_metadata: { role: 'admin', full_name: ownerName },
-      })
-
-      if (authErr) {
-        // Creation failed — try to find the existing user by email
-        const { data: listData, error: listErr } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 })
-        const existingUser = listData?.users?.find(u => u.email?.toLowerCase() === ownerEmail.toLowerCase())
-
-        if (existingUser) {
-          // User already exists — reset their password and reuse their account
-          ownerId = existingUser.id
-          isExistingUser = true
-          await supabaseAdmin.auth.admin.updateUserById(ownerId, {
-            password: tempPassword,
-            user_metadata: { role: 'admin', full_name: ownerName },
-          })
-          toast(`⚠️ Email already registered. Password has been reset.`, { icon: '🔄' })
-        } else {
-          // Truly unknown error — throw it to the user
-          throw new Error(authErr.message || 'Failed to create owner account. Please try again.')
-        }
-      } else {
-        ownerId = authData.user.id
+      if (adminErr) {
+        throw new Error(adminErr)
       }
 
-      // 2. Upsert profile row with admin role
-      await supabaseAdmin.from('profiles').upsert({
-        id: ownerId,
-        email: ownerEmail,
-        role: 'admin',
-      })
+      const ownerId = adminResult!.userId
+      const isExistingUser = adminResult!.isExisting ?? false
 
-      // 3. Check if this user already owns a hostel with the same name
-      const { data: existingHostel } = await supabaseAdmin
-        .from('hostels')
-        .select('id')
-        .eq('owner_id', ownerId)
-        .eq('name', hostelName)
-        .maybeSingle()
-
-      if (existingHostel) {
-        throw new Error(`A hostel named "${hostelName}" already exists for this owner. Use a different name.`)
+      if (isExistingUser) {
+        toast(`⚠️ Email already registered. Password has been reset.`, { icon: '🔄' })
       }
 
-      // 4. Create hostel
-      const { data: hostelData, error: hostelErr } = await supabaseAdmin.from('hostels').insert({
-        owner_id: ownerId,
-        name: hostelName,
+      // 2. Create hostel with rooms/beds via edge function
+      const { data: hostelResult, error: hostelErr } = await createHostelFull({
+        ownerId,
+        hostelName,
         address,
-        contact_email: contactEmail || ownerEmail,
-        contact_phone: contactPhone || ownerPhone,
-        total_floors: floors.length,
-      }).select().single()
-      if (hostelErr) throw new Error(`Hostel error: ${hostelErr.message}`)
-      const hostelId = hostelData.id
+        contactEmail: contactEmail || ownerEmail,
+        contactPhone: contactPhone || ownerPhone,
+        totalFloors: floors.length,
+        floors,
+        menu,
+      })
 
-      // 5. Save food menu
-      const { error: menuErr } = await supabaseAdmin.from('food_menus').upsert({ hostel_id: hostelId, menu })
-      if (menuErr) console.warn('Food menu save skipped:', menuErr.message)
-
-      // 6. Create rooms and beds
-      let roomsCreated = 0
-      let bedsCreated = 0
-      for (const floor of floors) {
-        for (const room of floor.rooms) {
-          const { data: roomData, error: roomErr } = await supabaseAdmin.from('rooms').insert({
-            hostel_id: hostelId,
-            room_number: room.roomNumber,
-            floor: floor.floorName,
-            type: room.type,
-            capacity: room.beds,
-          }).select().single()
-
-          if (roomErr) {
-            console.warn(`Skipped room ${room.roomNumber}:`, roomErr.message)
-            continue
-          }
-          roomsCreated++
-
-          const bedInserts = Array.from({ length: room.beds }, (_, bi) => ({
-            hostel_id: hostelId,
-            room_id: roomData.id,
-            bed_number: `B${bi + 1}`,
-            status: 'available',
-          }))
-          const { error: bedErr } = await supabaseAdmin.from('beds').insert(bedInserts)
-          if (!bedErr) bedsCreated += room.beds
-        }
+      if (hostelErr) {
+        throw new Error(hostelErr)
       }
 
       setDone({
         email: ownerEmail,
-        password: credentialPassword,
+        password: tempPassword,
         isExistingUser,
-        hostelCode: hostelData.hostel_code || 'HOS-xxx',
-        summary: `${floors.length} floors · ${roomsCreated} rooms · ${bedsCreated} beds`,
+        hostelCode: hostelResult?.hostelCode || 'HOS-xxx',
+        summary: `${floors.length} floors · ${hostelResult?.roomsCreated ?? 0} rooms · ${hostelResult?.bedsCreated ?? 0} beds`,
       })
-      toast.success(`✅ Hostel "${hostelName}" created with ${roomsCreated} rooms!`)
+      toast.success(`✅ Hostel "${hostelName}" created with ${hostelResult?.roomsCreated ?? 0} rooms!`)
     } catch (err: any) {
       toast.error(err.message || 'Failed to create hostel')
       setSubmitting(false)

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
+import { ChangePasswordPrompt } from '../components/ChangePasswordPrompt'
 import { supabase } from './supabase'
 
 interface AuthContextType {
@@ -7,6 +8,7 @@ interface AuthContextType {
   user: User | null
   role: 'super_admin' | 'admin' | 'student' | null
   studentData: any | null
+  needsPasswordChange: boolean
   signOut: () => Promise<void>
   loading: boolean
 }
@@ -16,6 +18,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   role: null,
   studentData: null,
+  needsPasswordChange: false,
   signOut: async () => {},
   loading: true,
 })
@@ -188,6 +191,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [role, setRole] = useState<'super_admin' | 'admin' | 'student' | null>(null)
   const [studentData, setStudentData] = useState<any | null>(null)
+  const [needsPasswordChange, setNeedsPasswordChange] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const checkRole = async (user: User | null) => {
@@ -209,8 +213,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (resolvedRole === 'student') {
         const data = await fetchStudentData(user.id, user.email)
         setStudentData(data)
+
+        // Check if student needs to change their temporary password
+        const metadata = user.user_metadata
+        const needsChange = metadata?.needs_password_change !== false && metadata?.role === 'student'
+        setNeedsPasswordChange(needsChange)
       } else {
         setStudentData(null)
+        setNeedsPasswordChange(false)
       }
     } catch (err) {
       console.error('[AuthContext] checkRole failed:', err)
@@ -250,8 +260,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut()
   }
 
+  const handlePasswordChanged = () => {
+    setNeedsPasswordChange(false)
+  }
+
   return (
-    <AuthContext.Provider value={{ session, user, role, studentData, signOut, loading }}>
+    <AuthContext.Provider value={{ session, user, role, studentData, needsPasswordChange, signOut, loading }}>
       {loading ? (
         <div className="min-h-screen flex items-center justify-center bg-slate-50">
           <div className="flex flex-col items-center gap-4">
@@ -264,6 +278,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </div>
+      ) : needsPasswordChange && role === 'student' ? (
+        <ChangePasswordPrompt onComplete={handlePasswordChanged} />
       ) : children}
     </AuthContext.Provider>
   )

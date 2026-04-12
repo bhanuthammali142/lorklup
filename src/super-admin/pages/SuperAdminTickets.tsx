@@ -1,9 +1,8 @@
 // @ts-nocheck
 import React, { useEffect, useState } from 'react'
 import { Ticket, CheckCircle2, Clock, Loader2, RefreshCw, Building2 } from 'lucide-react'
-import { supabaseAdmin } from '../../lib/supabase'
+import { supabase } from '../../lib/supabase'
 import toast from 'react-hot-toast'
-const supabase = supabaseAdmin // Super Admin bypasses RLS
 
 const STATUS_COLORS = {
   open: 'bg-rose-50 text-rose-700',

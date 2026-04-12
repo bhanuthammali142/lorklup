@@ -12,6 +12,16 @@ dist
 dist-ssr
 *.local
 
+# Environment files (NEVER commit secrets)
+.env
+.env.*
+!.env.example
+
+# Scripts that may reference service role keys
+run-migration.mjs
+query.js
+db-check.mjs
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

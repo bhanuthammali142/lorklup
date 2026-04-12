@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
+import { createStudentUser } from './admin-api'
 import type { Hostel, Student, Fee } from '../types'
-import { supabaseAdmin } from './supabase-admin'
 
 // ─── HOSTEL ─────────────────────────────────────────────────────────────────
 
@@ -46,30 +46,23 @@ export async function addStudent(payload: Omit<Student, 'id' | 'created_at' | 'r
   let authEmail = payload.email;
 
   if (payload.email || payload.phone) {
-    authEmail = payload.email || `${payload.phone.replace(/\D/g,'')}@hostel.local`;
-    generatedPassword = Math.random().toString(36).slice(-6).toUpperCase() + Math.floor(Math.random() * 100);
+    // FIX: Include hostel_id prefix for uniqueness across tenants
+    // This prevents two hostels from colliding on the same phone-based email.
+    const hostelPrefix = payload.hostel_id.substring(0, 8)
+    authEmail = payload.email || `${hostelPrefix}_${payload.phone.replace(/\D/g,'')}@hostel.app`;
+    generatedPassword = Math.random().toString(36).slice(-8).toUpperCase() + Math.floor(Math.random() * 100);
 
-    // Create user immediately, pre-verified, with random password
-    const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
-      email: authEmail,
-      email_confirm: true,
-      password: generatedPassword,
-      user_metadata: { full_name: payload.full_name, role: 'student' }
-    });
-    
-    if (authErr) {
-      if (authErr.message.includes('already exists')) {
-        throw new Error(`A user with email/phone ${authEmail} already exists. Please use a different one.`);
-      }
-      throw authErr;
+    // Create user via edge function (service role key stays server-side)
+    const { data: result, error: createErr } = await createStudentUser(
+      authEmail,
+      generatedPassword,
+      payload.full_name
+    )
+
+    if (createErr) {
+      throw new Error(createErr)
     }
-    userId = authData.user.id;
-
-    // CRITICAL FIX: Write student role to profiles table IMMEDIATELY.
-    const { error: profileErr } = await supabaseAdmin
-      .from('profiles')
-      .upsert({ id: userId, email: authEmail, role: 'student' });
-    if (profileErr) console.error('[addStudent] Failed to write profiles row:', profileErr.message);
+    userId = result?.userId ?? null
   }
 
   // 3. Insert student record
@@ -84,7 +77,9 @@ export async function addStudent(payload: Omit<Student, 'id' | 'created_at' | 'r
     const { data: room } = await supabase.from('rooms').select('monthly_fee').eq('id', data.room_id).single()
     if (room && Number(room.monthly_fee) > 0) {
       const now = new Date()
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
+      // FIX: Normalize month to YYYY-MM-01 date-only string (no time component)
+      // This prevents timezone-induced duplicate fees in the same month.
+      const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
       const dueDate = new Date(now.getFullYear(), now.getMonth() + 1, 5).toISOString().split('T')[0]
       await supabase.from('fees').insert({
         hostel_id: payload.hostel_id,
@@ -260,6 +255,10 @@ export async function autoMarkOverdue(hostelId: string) {
 }
 
 export async function generateBulkFees(hostelId: string, monthDate: string, dueDate: string) {
+  // FIX: Normalize monthDate to YYYY-MM-01 to prevent timezone-induced duplicates
+  const parsed = new Date(monthDate)
+  const normalizedMonth = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-01`
+
   // Get all active students with a room
   const { data: students } = await supabase
     .from('students')
@@ -269,12 +268,12 @@ export async function generateBulkFees(hostelId: string, monthDate: string, dueD
 
   if (!students || students.length === 0) return { created: 0 };
 
-  // Get fees already generated for this month
+  // Get fees already generated for this month (using normalized date)
   const { data: existingFees } = await supabase
     .from('fees')
     .select('student_id')
     .eq('hostel_id', hostelId)
-    .eq('month', monthDate);
+    .eq('month', normalizedMonth);
 
   const existingStudentIds = new Set(existingFees?.map(f => f.student_id) || []);
 
@@ -285,7 +284,7 @@ export async function generateBulkFees(hostelId: string, monthDate: string, dueD
       student_id: s.id,
       amount: Number((s.rooms as any).monthly_fee),
       due_amount: Number((s.rooms as any).monthly_fee),
-      month: monthDate,
+      month: normalizedMonth,
       due_date: dueDate,
       status: 'pending'
     }));
@@ -320,7 +319,7 @@ export function exportStudentsCSV(students: Student[]) {
 
 export async function getDashboardStats(hostelId: string) {
   const now = new Date()
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0]
 
   const [{ count: students }, { data: beds }, { data: fees }] = await Promise.all([

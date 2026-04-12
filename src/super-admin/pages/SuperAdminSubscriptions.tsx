@@ -1,8 +1,7 @@
 // @ts-nocheck
 import React, { useEffect, useState } from 'react'
 import { CreditCard, CheckCircle2, XCircle, Clock, Building2, TrendingUp } from 'lucide-react'
-import { supabaseAdmin } from '../../lib/supabase'
-const supabase = supabaseAdmin // Super Admin bypasses RLS
+import { listAllHostels } from '../../lib/admin-api'
 
 const PLANS = [
   { name: 'Starter', price: 999, color: 'bg-slate-100 text-slate-700', max: '≤50 students' },
@@ -15,8 +14,8 @@ export function SuperAdminSubscriptions() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.from('hostels').select('*').order('created_at', { ascending: false }).then(({ data }) => {
-      setHostels(data || [])
+    listAllHostels().then(({ data }) => {
+      setHostels(data?.hostels || [])
       setLoading(false)
     })
   }, [])

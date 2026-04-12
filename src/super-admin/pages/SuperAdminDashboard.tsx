@@ -2,8 +2,8 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Building2, CreditCard, Users, TrendingUp, ShieldAlert, CheckCircle2 } from 'lucide-react'
-import { supabaseAdmin } from '../../lib/supabase'
-const supabase = supabaseAdmin // Super Admin bypasses RLS
+import { listAllHostels } from '../../lib/admin-api'
+import { supabase } from '../../lib/supabase'
 
 function fmt(n: number) {
   if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`
@@ -24,10 +24,9 @@ export function SuperAdminDashboard() {
 
   useEffect(() => {
     const loadData = async () => {
-      const [hostelsRes, studentsRes] = await Promise.all([
-        supabase.from('hostels').select('*', { count: 'exact' }),
-        supabase.from('students').select('*', { count: 'exact' }),
-      ])
+      // Fetch hostels via edge function (no service-role key in browser)
+      const { data: hostelsResult } = await listAllHostels()
+      const hostels = hostelsResult?.hostels || []
 
       let openTickets = 0
       try {
@@ -38,14 +37,13 @@ export function SuperAdminDashboard() {
         openTickets = count || 0
       } catch (_) {}
 
-      const hostels = hostelsRes.data || []
       setStats({
-        totalHostels: hostelsRes.count || 0,
-        activeStudents: studentsRes.count || 0,
-        platformRevenue: (hostelsRes.count || 0) * 5000,
+        totalHostels: hostels.length,
+        activeStudents: 0, // Will be populated when stats edge function returns
+        platformRevenue: hostels.length * 5000,
         openTickets,
       })
-      setRecentHostels(hostels.sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 5))
+      setRecentHostels(hostels.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 5))
       setLoading(false)
     }
     loadData()
