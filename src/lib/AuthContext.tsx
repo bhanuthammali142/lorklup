@@ -5,7 +5,7 @@ import { supabase } from './supabase'
 interface AuthContextType {
   session: Session | null
   user: User | null
-  role: 'admin' | 'student' | null
+  role: 'super_admin' | 'admin' | 'student' | null
   studentData: any | null
   signOut: () => Promise<void>
   loading: boolean
@@ -30,7 +30,42 @@ const AuthContext = createContext<AuthContextType>({
  * the check fails and silently defaults to 'admin'. A dedicated profiles row
  * written at account-creation time is immune to that race condition.
  */
-async function resolveRoleFromProfile(userId: string): Promise<'admin' | 'student' | null> {
+async function resolveRoleFromProfile(userId: string): Promise<'super_admin' | 'admin' | 'student' | null> {
+  const { data: userData } = await supabase.auth.getUser()
+  const email = userData.user?.email
+  const roleFromMetadata = userData.user?.user_metadata?.role
+
+  // ---- PLATFORM OWNER OVERRIDE ----
+  // No SQL migration needed! The owner email becomes Super Admin automatically.
+  if (email === 'bhanuthammali2601@gmail.com' || email === 'admin@hostelos.com') {
+    // Ensure profile row exists to satisfy foreign keys, but keep DB constrained to 'admin'
+    await supabase.from('profiles').upsert({ id: userId, email: email || '', role: 'admin' })
+    return 'super_admin'
+  }
+
+  // ---- RLS-PROOF METADATA CHECK ----
+  // If the role was stamped onto the user's JWT metadata at creation time, trust it immediately.
+  if (roleFromMetadata === 'student' || roleFromMetadata === 'admin') {
+    await supabase.from('profiles').upsert({ id: userId, email: email || '', role: roleFromMetadata })
+    return roleFromMetadata
+  }
+
+  // ---- SELF-HEALING LOGIC ----
+  // If the user's email exists in the students table, they are DEFINITELY a student.
+  // This auto-corrects any profiles that were mistakenly set to 'admin' due to bugs.
+  if (email) {
+    const { data: studentMatch } = await supabase
+      .from('students')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle()
+
+    if (studentMatch) {
+      await supabase.from('profiles').upsert({ id: userId, email, role: 'student' })
+      return 'student'
+    }
+  }
+
   const { data, error } = await supabase
     .from('profiles')
     .select('role')
@@ -76,19 +111,28 @@ async function detectAndWriteProfile(userId: string): Promise<'admin' | 'student
   }
 
   // Check students table (try user_id first, then email)
-  const { data: student } = await supabase
-    .from('students')
-    .select('id, email, user_id')
-    .eq('user_id', userId)
-    .maybeSingle()
+  const { data: userData } = await supabase.auth.getUser()
+  const currentEmail = userData.user?.email ?? ''
+
+  let studentQuery = supabase.from('students').select('id, email, user_id').eq('user_id', userId)
+  if (currentEmail) {
+    studentQuery = supabase.from('students').select('id, email, user_id').or(`user_id.eq.${userId},email.eq.${currentEmail}`)
+  }
+  
+  const { data: student } = await studentQuery.maybeSingle()
 
   if (student) {
-    const { data: user } = await supabase.auth.getUser()
     await supabase.from('profiles').upsert({
       id: userId,
-      email: user.user?.email ?? student.email ?? '',
+      email: currentEmail || student.email || '',
       role: 'student',
     })
+    
+    // Also pair the auth ID back to the student record if it was missing
+    if (!student.user_id) {
+      await supabase.from('students').update({ user_id: userId }).eq('id', student.id)
+    }
+    
     return 'student'
   }
 
@@ -96,10 +140,9 @@ async function detectAndWriteProfile(userId: string): Promise<'admin' | 'student
   // This is a self-registered user (students only come via email invite
   // and always have a student row written before they accept). Treat as admin.
   console.warn('[AuthContext] No hostel/student record — writing admin profile for self-registered user:', userId)
-  const { data: user } = await supabase.auth.getUser()
   await supabase.from('profiles').upsert({
     id: userId,
-    email: user.user?.email ?? '',
+    email: currentEmail,
     role: 'admin',
   })
   return 'admin'
@@ -113,7 +156,7 @@ async function fetchStudentData(userId: string, email?: string) {
   // Try direct user_id match
   const { data: student } = await supabase
     .from('students')
-    .select('*, rooms(room_number), beds(bed_number)')
+    .select('*, rooms(room_number, floor, type), beds(bed_number)')
     .eq('user_id', userId)
     .maybeSingle()
 
@@ -123,7 +166,7 @@ async function fetchStudentData(userId: string, email?: string) {
   if (email) {
     const { data: byEmail } = await supabase
       .from('students')
-      .select('*, rooms(room_number), beds(bed_number)')
+      .select('*, rooms(room_number, floor, type), beds(bed_number)')
       .eq('email', email)
       .maybeSingle()
 
@@ -143,7 +186,7 @@ async function fetchStudentData(userId: string, email?: string) {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [user, setUser] = useState<User | null>(null)
-  const [role, setRole] = useState<'admin' | 'student' | null>(null)
+  const [role, setRole] = useState<'super_admin' | 'admin' | 'student' | null>(null)
   const [studentData, setStudentData] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
 

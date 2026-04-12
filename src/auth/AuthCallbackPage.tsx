@@ -50,36 +50,44 @@ export function AuthCallbackPage() {
           return
         }
 
+        // ---- SELF-HEALING / LEGACY DETECTION PATH ----
+        // Profile doesn't exist OR we need to double check if they are actually a student
+        const email = user.email ?? ''
+        
+        // 1. Check students table first. If they are an invited student, they MUST be treated as a student.
+        let studentQuery = supabase.from('students').select('id, email, user_id').eq('user_id', user.id)
+        if (email) {
+          studentQuery = supabase.from('students').select('id, email, user_id').or(`user_id.eq.${user.id},email.eq.${email}`)
+        }
+        
+        const { data: student } = await studentQuery.maybeSingle()
+
+        if (student) {
+          await supabase.from('profiles').upsert({ id: user.id, email: email || student.email || '', role: 'student' })
+          if (!student.user_id) {
+            await supabase.from('students').update({ user_id: user.id }).eq('id', student.id)
+          }
+          navigate('/student/dashboard', { replace: true })
+          return
+        }
+
+        // 2. If no student record, check if they own a hostel (admin)
+        const { data: hostel } = await supabase
+          .from('hostels')
+          .select('id')
+          .eq('owner_id', user.id)
+          .maybeSingle()
+
+        if (hostel) {
+          await supabase.from('profiles').upsert({ id: user.id, email, role: 'admin' })
+          navigate('/admin/dashboard', { replace: true })
+          return
+        }
+
+        // 3. Fallback: if they just signed up and have no profile and no student record, default new users to admin
         if (!profile) {
-          // Profile doesn't exist yet — try the legacy detection path
-          // (for users created before the profiles table existed)
-          const { data: hostel } = await supabase
-            .from('hostels')
-            .select('id')
-            .eq('owner_id', user.id)
-            .maybeSingle()
-
-          if (hostel) {
-            // Write admin profile and redirect
-            await supabase.from('profiles').upsert({ id: user.id, email: user.email ?? '', role: 'admin' })
-            navigate('/admin/dashboard', { replace: true })
-            return
-          }
-
-          // Check students table by user_id or email
-          const { data: student } = await supabase
-            .from('students')
-            .select('id')
-            .or(`user_id.eq.${user.id},email.eq.${user.email}`)
-            .maybeSingle()
-
-          if (student) {
-            await supabase.from('profiles').upsert({ id: user.id, email: user.email ?? '', role: 'student' })
-            navigate('/student/dashboard', { replace: true })
-            return
-          }
-
-          setError('Your account could not be identified. Please contact your hostel administrator.')
+          await supabase.from('profiles').upsert({ id: user.id, email, role: 'admin' })
+          navigate('/admin/dashboard', { replace: true })
           return
         }
 

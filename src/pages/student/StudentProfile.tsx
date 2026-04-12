@@ -51,7 +51,7 @@ export function StudentProfile() {
               <h2 className="text-2xl font-black text-white">{studentData.full_name}</h2>
               <div className="flex flex-wrap items-center gap-2 mt-2">
                 <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-400 bg-emerald-900/30 border border-emerald-800/40 rounded-full px-2.5 py-1">
-                  <Bed className="h-3 w-3" /> Room {studentData.rooms?.room_number ?? 'Unassigned'} · Bed {studentData.beds?.bed_number ?? 'N/A'}
+                  <Bed className="h-3 w-3" /> {studentData.rooms?.floor ? `${studentData.rooms.floor} · ` : ''}Room {studentData.rooms?.room_number ?? 'N/A'} · Bed {studentData.beds?.bed_number ?? 'N/A'}
                 </span>
                 <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-400 bg-blue-900/30 border border-blue-800/40 rounded-full px-2.5 py-1">
                   <Shield className="h-3 w-3" /> {studentData.is_verified ? 'Verified Student' : 'Pending Verification'}
@@ -94,20 +94,32 @@ export function StudentProfile() {
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
               <Bed className="h-3.5 w-3.5" /> Hostel Allocation
             </h3>
-            <div className="bg-slate-900 text-white rounded-2xl p-5 flex flex-col sm:flex-row gap-6 items-center">
-              <div className="text-center sm:text-left">
-                <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">Room Number</p>
-                <p className="text-3xl font-black">{studentData.rooms?.room_number ?? 'Not Assigned'}</p>
+            <div className="bg-slate-900 text-white rounded-2xl p-5 flex flex-col sm:flex-row gap-6 lg:gap-10 items-center justify-between">
+              <div className="flex flex-col sm:flex-row gap-6 lg:gap-10 items-center w-full">
+                <div className="text-center sm:text-left">
+                  <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1 flex items-center justify-center sm:justify-start gap-1">
+                    Floor
+                  </p>
+                  <p className="text-3xl font-black">{studentData.rooms?.floor ?? 'N/A'}</p>
+                </div>
+                <div className="w-px h-12 bg-slate-700 hidden sm:block" />
+                <div className="text-center sm:text-left">
+                  <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1 flex items-center justify-center sm:justify-start gap-1">
+                    Room <span className="ml-1 bg-slate-800 text-[9px] px-1.5 py-0.5 rounded text-slate-300">{studentData.rooms?.type ?? 'Unknown'}</span>
+                  </p>
+                  <p className="text-3xl font-black">{studentData.rooms?.room_number ?? 'N/A'}</p>
+                </div>
+                <div className="w-px h-12 bg-slate-700 hidden sm:block" />
+                <div className="text-center sm:text-left">
+                  <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">Bed</p>
+                  <p className="text-3xl font-black text-blue-400">{studentData.beds?.bed_number ?? 'N/A'}</p>
+                </div>
               </div>
-              <div className="w-px h-12 bg-slate-700 hidden sm:block" />
-              <div className="text-center sm:text-left">
-                <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">Bed Number</p>
-                <p className="text-3xl font-black">{studentData.beds?.bed_number ?? 'N/A'}</p>
-              </div>
-              <div className="w-px h-12 bg-slate-700 hidden sm:block" />
-              <div className="text-center sm:text-left">
+              <div className="sm:border-l border-slate-700 sm:pl-6 text-center sm:text-right shrink-0">
                 <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">Status</p>
-                <p className="text-sm font-bold text-emerald-400 mt-2">{studentData.is_verified ? '✅ Verified' : '⏳ Pending'}</p>
+                <div className="inline-flex items-center justify-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-lg">
+                   {studentData.is_verified ? '✅ Verified' : '⏳ Pending'}
+                </div>
               </div>
             </div>
           </div>

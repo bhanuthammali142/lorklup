@@ -91,3 +91,13 @@ CREATE POLICY "admin_all_attendance" ON attendance FOR ALL
 
 CREATE POLICY "student_read_own_attendance" ON attendance FOR SELECT
   USING (student_id IN (SELECT id FROM students WHERE user_id = auth.uid()));
+
+-- 12. Fix rooms RLS — students must be able to read room details
+DROP POLICY IF EXISTS "student_read_rooms" ON rooms;
+CREATE POLICY "student_read_rooms" ON rooms FOR SELECT
+  USING (hostel_id IN (SELECT hostel_id FROM students WHERE user_id = auth.uid()));
+
+-- 13. Fix beds RLS — students must be able to read bed details
+DROP POLICY IF EXISTS "student_read_beds" ON beds;
+CREATE POLICY "student_read_beds" ON beds FOR SELECT
+  USING (hostel_id IN (SELECT hostel_id FROM students WHERE user_id = auth.uid()));

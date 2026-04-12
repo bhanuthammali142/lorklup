@@ -76,7 +76,7 @@ export function StudentDashboard() {
             {studentData.full_name?.split(' ')[0] || 'Student'} 👋
           </h1>
           <p className="text-slate-400 text-sm">
-            Room <strong className="text-slate-200">{studentData.rooms?.room_number ?? '—'}</strong> · Bed <strong className="text-slate-200">{studentData.beds?.bed_number ?? '—'}</strong>
+            {studentData.rooms?.floor ? `${studentData.rooms.floor} · ` : ''}Room <strong className="text-slate-200">{studentData.rooms?.room_number ?? '—'}</strong> · Bed <strong className="text-slate-200">{studentData.beds?.bed_number ?? '—'}</strong>
           </p>
           {overdueFees.length > 0 && (
             <div className="mt-4 flex items-center gap-2 bg-rose-500/20 border border-rose-500/30 rounded-xl px-4 py-2.5">
@@ -93,8 +93,8 @@ export function StudentDashboard() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           {
-            label: 'Room',
-            value: studentData.rooms?.room_number ?? 'N/A',
+            label: 'Floor / Room',
+            value: studentData.rooms ? `${studentData.rooms.floor ? `${studentData.rooms.floor} / ` : ''}${studentData.rooms.room_number}` : 'N/A',
             sub: `Bed ${studentData.beds?.bed_number ?? '—'}`,
             icon: Bed,
             color: 'bg-indigo-50 text-indigo-600',

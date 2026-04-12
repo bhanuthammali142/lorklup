@@ -42,24 +42,34 @@ export async function getStudents(hostelId: string): Promise<Student[]> {
 
 export async function addStudent(payload: Omit<Student, 'id' | 'created_at' | 'rooms' | 'beds' | 'user_id'> & { email?: string }) {
   let userId = null;
+  let generatedPassword = null;
+  let authEmail = payload.email;
 
-  if (payload.email) {
-    // 1. Send invite email & create auth account
-    const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.inviteUserByEmail(payload.email);
-    if (authErr) throw authErr;
+  if (payload.email || payload.phone) {
+    authEmail = payload.email || `${payload.phone.replace(/\D/g,'')}@hostel.local`;
+    generatedPassword = Math.random().toString(36).slice(-6).toUpperCase() + Math.floor(Math.random() * 100);
+
+    // Create user immediately, pre-verified, with random password
+    const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+      email: authEmail,
+      email_confirm: true,
+      password: generatedPassword,
+      user_metadata: { full_name: payload.full_name, role: 'student' }
+    });
+    
+    if (authErr) {
+      if (authErr.message.includes('already exists')) {
+        throw new Error(`A user with email/phone ${authEmail} already exists. Please use a different one.`);
+      }
+      throw authErr;
+    }
     userId = authData.user.id;
 
-    // 2. CRITICAL FIX: Write student role to profiles table IMMEDIATELY.
-    //    This is the single source of truth used by AuthContext.checkRole().
-    //    Without this, the student clicks the email link and gets treated as
-    //    admin because no profile row exists yet.
+    // CRITICAL FIX: Write student role to profiles table IMMEDIATELY.
     const { error: profileErr } = await supabaseAdmin
       .from('profiles')
-      .upsert({ id: userId, email: payload.email, role: 'student' });
-    if (profileErr) {
-      console.error('[addStudent] Failed to write profiles row:', profileErr.message);
-      // Non-fatal: auth account is created, student can still be backfilled via detectAndWriteProfile
-    }
+      .upsert({ id: userId, email: authEmail, role: 'student' });
+    if (profileErr) console.error('[addStudent] Failed to write profiles row:', profileErr.message);
   }
 
   // 3. Insert student record
@@ -92,7 +102,11 @@ export async function addStudent(payload: Omit<Student, 'id' | 'created_at' | 'r
       await supabase.from('beds').update({ status: 'occupied' }).eq('id', payload.bed_id)
     }
   }
-  return data
+  
+  return { 
+    student: data, 
+    credentials: generatedPassword ? { email: authEmail, password: generatedPassword } : null 
+  }
 }
 
 export async function updateStudent(id: string, payload: Partial<Student>) {

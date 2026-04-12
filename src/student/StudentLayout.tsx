@@ -23,8 +23,9 @@ import {
   UtensilsCrossed,
   ShieldCheck,
 } from 'lucide-react'
-import { useAuth } from '../../lib/AuthContext'
-import { cn } from '../../lib/utils'
+import { useAuth } from '../lib/AuthContext'
+import { cn } from '../lib/utils'
+
 
 const NAV = [
   { name: 'Home',        href: '/student/dashboard',      icon: LayoutDashboard,      end: true },
@@ -36,8 +37,34 @@ const NAV = [
 ]
 
 export function StudentLayout() {
-  const { signOut, studentData } = useAuth()
+  const { signOut, studentData, user } = useAuth()
   const initial = studentData?.full_name?.charAt(0)?.toUpperCase() || 'S'
+
+  if (!studentData) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-slate-50 flex-col gap-4 p-6 text-center">
+        <div className="h-16 w-16 bg-rose-100 rounded-full flex items-center justify-center mb-2">
+          <MessageSquareWarning className="h-8 w-8 text-rose-600" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-900">Database Security Error</h2>
+        <p className="text-slate-500 max-w-md">
+          You are logged in, but the database's <strong>Row Level Security (RLS)</strong> policies are blocking you from seeing your own student profile.
+        </p>
+        <div className="mt-4 bg-white border border-slate-200 p-4 rounded-xl text-left text-sm text-slate-600 w-full max-w-md shadow-sm">
+          <p className="font-bold text-slate-900 mb-1">To fix this issue:</p>
+          <ol className="list-decimal pl-5 space-y-1.5">
+            <li>Go to your Supabase Dashboard &gt; SQL Editor.</li>
+            <li>Open the file <code>supabase_migration_profiles.sql</code> from your code editor.</li>
+            <li>Paste all the SQL into Supabase and click <strong>Run</strong>.</li>
+            <li>Refresh this page.</li>
+          </ol>
+        </div>
+        <button onClick={signOut} className="mt-4 px-6 py-2.5 bg-slate-900 text-white rounded-xl font-semibold hover:bg-slate-800 transition">
+          Sign Out
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-screen bg-slate-50 flex-col md:flex-row overflow-hidden">
@@ -81,7 +108,7 @@ export function StudentLayout() {
             <div className="min-w-0">
               <p className="text-sm font-bold text-white truncate">{studentData?.full_name || 'Student'}</p>
               <p className="text-[11px] text-slate-400 truncate">
-                Room {studentData?.rooms?.room_number ?? '—'} · Bed {studentData?.beds?.bed_number ?? '—'}
+                {studentData?.rooms ? `${studentData.rooms.floor || 'Floor'} · Rm ${studentData.rooms.room_number}` : 'Room —'} · Bed {studentData?.beds?.bed_number ?? '—'}
               </p>
             </div>
           </div>

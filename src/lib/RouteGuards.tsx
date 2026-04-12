@@ -28,6 +28,7 @@ export function AdminRoute() {
 
   // STRICT: students cannot access any admin routes
   if (role === 'student') return <Navigate to="/student/dashboard" replace />
+  if (role === 'super_admin') return <Navigate to="/superadmin/dashboard" replace />
 
   // role === null means no profile row found — DO NOT default to admin
   if (role === null) {
@@ -61,10 +62,37 @@ export function StudentRoute() {
 
   // STRICT: admins cannot access any student routes
   if (role === 'admin') return <Navigate to="/admin/dashboard" replace />
+  if (role === 'super_admin') return <Navigate to="/superadmin/dashboard" replace />
 
   // role === null means no profile row found
   if (role === null) {
     return <UnauthorizedScreen onSignOut={signOut} message="Your account role could not be verified. Please sign in again or contact your hostel administrator." />
+  }
+
+  return <Outlet />
+}
+
+/**
+ * SuperAdminRoute — protects all /superadmin/* routes.
+ */
+export function SuperAdminRoute() {
+  const { user, role, loading, signOut } = useAuth()
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>
+    )
+  }
+
+  if (!user) return <Navigate to="/auth" replace />
+
+  if (role === 'student') return <Navigate to="/student/dashboard" replace />
+  if (role === 'admin') return <Navigate to="/admin/dashboard" replace />
+
+  if (role === null) {
+    return <UnauthorizedScreen onSignOut={signOut} message="Your account is not configured as a Super Admin." />
   }
 
   return <Outlet />

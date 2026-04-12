@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react'
 import { Users, Bed, CreditCard, TrendingUp, Sparkles, AlertCircle, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../lib/AuthContext'
-import { getOrCreateHostel, getDashboardStats, getRevenueByMonth } from '../lib/api'
+import { getOrCreateHostel, getDashboardStats, getRevenueByMonth, getRoomsWithBeds } from '../lib/api'
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis } from 'recharts'
 
 function fmt(n: number) {
@@ -17,6 +17,7 @@ export function Dashboard() {
   const [hostelId, setHostelId] = useState<string | null>(null)
   const [stats, setStats] = useState({ totalStudents: 0, totalBeds: 0, occupiedBeds: 0, monthlyRevenue: 0, pendingFees: 0, overdueFees: 0 })
   const [revenueData, setRevenueData] = useState<{ name: string; amount: number }[]>([])
+  const [rooms, setRooms] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -29,8 +30,8 @@ export function Dashboard() {
   useEffect(() => {
     if (!hostelId) return
     setLoading(true)
-    Promise.all([getDashboardStats(hostelId), getRevenueByMonth(hostelId)])
-      .then(([s, rev]) => { setStats(s); setRevenueData(rev) })
+    Promise.all([getDashboardStats(hostelId), getRevenueByMonth(hostelId), getRoomsWithBeds(hostelId)])
+      .then(([s, rev, rData]) => { setStats(s); setRevenueData(rev); setRooms(rData) })
       .finally(() => setLoading(false))
   }, [hostelId])
 
@@ -52,7 +53,7 @@ export function Dashboard() {
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => hostelId && Promise.all([getDashboardStats(hostelId), getRevenueByMonth(hostelId)]).then(([s, rev]) => { setStats(s); setRevenueData(rev) })}
+            onClick={() => hostelId && Promise.all([getDashboardStats(hostelId), getRevenueByMonth(hostelId), getRoomsWithBeds(hostelId)]).then(([s, rev, rData]) => { setStats(s); setRevenueData(rev); setRooms(rData) })}
             className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
           >
             <RefreshCw className="h-4 w-4 text-slate-400" />
@@ -173,6 +174,89 @@ export function Dashboard() {
               <p className="text-sm text-purple-700 mt-1">Current occupancy is {occupancyRate}%. {occupancyRate < 80 ? 'Consider marketing to fill vacant beds.' : 'Excellent utilization!'}</p>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Live Room Status Matrix */}
+      <div className="card-premium flex flex-col mt-6">
+        <div className="border-b border-slate-100 p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">Live Room Status</h2>
+            <p className="text-sm text-slate-400 mt-0.5">Floor-wise room and bed availability</p>
+          </div>
+          <div className="flex gap-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>Available</span>
+            <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>Maintenance</span>
+            <span className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-slate-300"></span>Occupied</span>
+          </div>
+        </div>
+        <div className="p-6">
+          {loading ? (
+            <div className="h-32 flex items-center justify-center animate-pulse text-slate-400 gap-2">
+              <RefreshCw className="w-5 h-5 animate-spin" /> Loading floors and rooms...
+            </div>
+          ) : rooms.length === 0 ? (
+            <div className="h-32 flex items-center justify-center flex-col text-slate-400 gap-2">
+               <Bed className="w-8 h-8 opacity-30" />
+               <p className="text-sm">No rooms configured. Add rooms to see the live status here.</p>
+            </div>
+          ) : (
+            <div className="space-y-8">
+              {Object.entries(
+                rooms.reduce((acc, room) => {
+                  const floorName = room.floor ? room.floor.trim() : 'Unspecified Floor';
+                  if (!acc[floorName]) acc[floorName] = [];
+                  acc[floorName].push(room);
+                  return acc;
+                }, {} as Record<string, typeof rooms>)
+              ).map(([floor, floorRooms]) => (
+                <div key={floor} className="bg-white rounded-xl">
+                  <div className="flex items-center gap-3 mb-4 border-b border-slate-100 pb-2">
+                    <div className="h-8 px-3 bg-blue-50 text-blue-700 rounded-lg flex items-center font-bold text-sm tracking-wide uppercase border border-blue-100">
+                      {floor}
+                    </div>
+                    <span className="text-sm font-medium text-slate-400">{floorRooms.length} Rooms</span>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    {floorRooms.map(room => (
+                      <div key={room.id} className="border border-slate-200 rounded-xl p-3 hover:border-blue-300 transition-colors bg-slate-50 shadow-sm relative group">
+                        <div className="flex justify-between items-center mb-3">
+                           <span className="font-bold text-slate-800 text-sm">Room {room.room_number}</span>
+                           <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider bg-white px-1.5 py-0.5 rounded border border-slate-100">{room.type}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {room.beds.sort((a, b) => a.bed_number.localeCompare(b.bed_number)).map(bed => (
+                            <div 
+                              key={bed.id} 
+                              title={`Bed ${bed.bed_number} - ${bed.status}`}
+                              className={`flex items-center justify-center h-7 w-7 sm:w-8 sm:h-8 rounded-lg text-xs font-bold transition-all shadow-sm ${
+                                bed.status === 'available' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200 group-hover:bg-emerald-500 group-hover:text-white cursor-help' : 
+                                bed.status === 'maintenance' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
+                                'bg-slate-200 text-slate-400 border border-slate-300'
+                              }`}
+                            >
+                              {bed.bed_number.replace(/[^0-9]/g, '') || bed.bed_number.charAt(0)}
+                            </div>
+                          ))}
+                        </div>
+                        {/* Occupancy Progress bar underneath */}
+                        <div className="mt-3 w-full bg-slate-200 h-1.5 rounded-full overflow-hidden flex">
+                          {room.beds.map((bed, i) => (
+                             <div 
+                               key={bed.id} 
+                               className={`h-full flex-1 ${bed.status === 'available' ? 'bg-transparent' : bed.status === 'maintenance' ? 'bg-amber-400' : 'bg-slate-400'}`} 
+                               style={{ marginLeft: i > 0 ? '1px' : '0' }}
+                             />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

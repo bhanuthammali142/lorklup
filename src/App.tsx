@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from './lib/AuthContext'
-import { AdminRoute, StudentRoute } from './lib/RouteGuards'
+import { AdminRoute, StudentRoute, SuperAdminRoute } from './lib/RouteGuards'
 
 // ── Auth (shared entry point) ────────────────────────────────────────────────
 import { AuthPage } from './auth/AuthPage'
@@ -31,7 +31,13 @@ import {
   StudentFoodMenu,
   StudentProfile,
 } from './student/pages/index'
-
+// ── Super Admin Module ────────────────────────────────────────────────────────
+import { SuperAdminLayout } from './super-admin/SuperAdminLayout'
+import { SuperAdminDashboard } from './super-admin/pages/SuperAdminDashboard'
+import { SuperAdminHostels } from './super-admin/pages/SuperAdminHostels'
+import { SuperAdminSubscriptions } from './super-admin/pages/SuperAdminSubscriptions'
+import { SuperAdminTickets } from './super-admin/pages/SuperAdminTickets'
+import { SuperAdminSettings } from './super-admin/pages/SuperAdminSettings'
 
 /**
  * App Router — Strict role-based routing.
@@ -88,7 +94,18 @@ function App() {
               <Route path="*"             element={<Navigate to="dashboard" replace />} />
             </Route>
           </Route>
-
+          {/* ── Super Admin Module ───────────────────────────────────────── */}
+          <Route element={<SuperAdminRoute />}>
+            <Route path="/superadmin" element={<SuperAdminLayout />}>
+              <Route index element={<Navigate to="dashboard" replace />} />
+              <Route path="dashboard" element={<SuperAdminDashboard />} />
+              <Route path="hostels" element={<SuperAdminHostels />} />
+              <Route path="subscriptions" element={<SuperAdminSubscriptions />} />
+              <Route path="tickets" element={<SuperAdminTickets />} />
+              <Route path="settings" element={<SuperAdminSettings />} />
+              <Route path="*" element={<Navigate to="dashboard" replace />} />
+            </Route>
+          </Route>
 
           {/* ── Catch-all → auth ─────────────────────────────────────────── */}
           <Route path="/" element={<Navigate to="/auth" replace />} />

@@ -60,9 +60,11 @@ export function AddStudentModal({ isOpen, hostelId, onClose, onSuccess }: AddStu
   const [parentOTPState, setParentOTPState] = useState<OTPState>('idle')
   const [parentOTP, setParentOTP] = useState('')
 
-  // Photo files
   const [aadhaarFile, setAadhaarFile] = useState<File | null>(null)
   const [idCardFile, setIdCardFile] = useState<File | null>(null)
+
+  // Credentials
+  const [credentials, setCredentials] = useState<{ email: string; password: string } | null>(null)
 
   const [form, setForm] = useState({
     full_name: '', aadhaar_number: '', phone: '', parent_phone: '', email: '',
@@ -105,7 +107,7 @@ export function AddStudentModal({ isOpen, hostelId, onClose, onSuccess }: AddStu
     if (phoneOTPState !== 'verified') return toast.error('Please verify the student phone number first.')
     setSaving(true)
     try {
-      const newStudent = await addStudent({
+      const response = await addStudent({
         hostel_id: hostelId,
         full_name: form.full_name,
         aadhaar_number: form.aadhaar_number || null,
@@ -125,6 +127,8 @@ export function AddStudentModal({ isOpen, hostelId, onClose, onSuccess }: AddStu
         parent_phone_verified: parentOTPState === 'verified',
       } as any)
 
+      const newStudent = response.student
+
       // Upload photos if provided
       if (newStudent && aadhaarFile) {
         try {
@@ -139,10 +143,15 @@ export function AddStudentModal({ isOpen, hostelId, onClose, onSuccess }: AddStu
         } catch { /* storage bucket may not be set up yet - photos skipped */ }
       }
 
-      const autoFeeMsg = form.room_id ? ' Fee record auto-created.' : ''
-      toast.success(`${form.full_name} added!${autoFeeMsg}`)
-      onSuccess()
-      resetForm()
+      if (response.credentials) {
+        setCredentials(response.credentials)
+        setStep(4) // Move to credentials display step
+      } else {
+        const autoFeeMsg = form.room_id ? ' Fee record auto-created.' : ''
+        toast.success(`${form.full_name} added!${autoFeeMsg}`)
+        onSuccess()
+        resetForm()
+      }
     } catch (e: any) {
       toast.error(e.message || 'Failed to save student.')
     } finally { setSaving(false) }
@@ -153,6 +162,7 @@ export function AddStudentModal({ isOpen, hostelId, onClose, onSuccess }: AddStu
     setPhoneOTPState('idle'); setPhoneOTP('')
     setParentOTPState('idle'); setParentOTP('')
     setAadhaarFile(null); setIdCardFile(null)
+    setCredentials(null)
     setForm({ full_name: '', aadhaar_number: '', phone: '', parent_phone: '', email: '', id_number: '', college_name: '', branch: '', joining_date: new Date().toISOString().split('T')[0], room_id: '', bed_id: '' })
   }
 
@@ -203,30 +213,35 @@ export function AddStudentModal({ isOpen, hostelId, onClose, onSuccess }: AddStu
         {/* Header */}
         <div className="border-b border-slate-100 p-5 flex justify-between items-center bg-slate-50">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">Add New Student</h2>
-            <p className="text-sm text-slate-500 mt-0.5">Secure 3-step admission process</p>
+            <h2 className="text-xl font-bold text-slate-900">{step === 4 ? 'Student Created Successfully!' : 'Add New Student'}</h2>
+            <p className="text-sm text-slate-500 mt-0.5">{step === 4 ? 'Please share these credentials with the student.' : 'Secure 3-step admission process'}</p>
           </div>
-          <button onClick={() => { resetForm(); onClose() }} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
+          <button onClick={() => { 
+            if (step === 4) { onSuccess(); } 
+            resetForm(); onClose();
+          }} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Stepper */}
-        <div className="px-6 py-3 border-b border-slate-100 flex items-center">
-          {[{ num: 1, label: 'Details & Docs' }, { num: 2, label: 'Verification' }, { num: 3, label: 'Room Allocation' }].map((s, i) => (
-            <div key={s.num} className="flex items-center">
-              <div className={cn("flex items-center gap-2", step >= s.num ? "text-blue-600 font-semibold" : "text-slate-400")}>
-                <div className={cn("h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold border",
-                  step > s.num ? "bg-blue-600 text-white border-blue-600" :
-                  step === s.num ? "border-blue-600 bg-blue-50 text-blue-600" : "border-slate-200 bg-slate-50 text-slate-400")}>
-                  {step > s.num ? <Check className="h-3 w-3" /> : s.num}
+        {step < 4 && (
+          <div className="px-6 py-3 border-b border-slate-100 flex items-center">
+            {[{ num: 1, label: 'Details & Docs' }, { num: 2, label: 'Verification' }, { num: 3, label: 'Room Allocation' }].map((s, i) => (
+              <div key={s.num} className="flex items-center">
+                <div className={cn("flex items-center gap-2", step >= s.num ? "text-blue-600 font-semibold" : "text-slate-400")}>
+                  <div className={cn("h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold border",
+                    step > s.num ? "bg-blue-600 text-white border-blue-600" :
+                    step === s.num ? "border-blue-600 bg-blue-50 text-blue-600" : "border-slate-200 bg-slate-50 text-slate-400")}>
+                    {step > s.num ? <Check className="h-3 w-3" /> : s.num}
+                  </div>
+                  <span className="text-sm hidden sm:block">{s.label}</span>
                 </div>
-                <span className="text-sm hidden sm:block">{s.label}</span>
+                {i < 2 && <ChevronRight className="h-4 w-4 mx-2 text-slate-300" />}
               </div>
-              {i < 2 && <ChevronRight className="h-4 w-4 mx-2 text-slate-300" />}
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* Step Content */}
         <div className="p-6 h-[400px] overflow-y-auto">
@@ -255,8 +270,8 @@ export function AddStudentModal({ isOpen, hostelId, onClose, onSuccess }: AddStu
                 </div>
               </div>
               <div>
-                <label className="text-sm font-medium text-slate-700">Student Portal Email (Magic Link Auth) *</label>
-                <input type="email" required value={form.email} onChange={e => set('email', e.target.value)} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-blue-50/30" placeholder="student@example.com" />
+                <label className="text-sm font-medium text-slate-700">Student Portal Email (or leave blank to use phone)</label>
+                <input type="email" value={form.email} onChange={e => set('email', e.target.value)} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-blue-50/30" placeholder="student@example.com (optional)" />
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
@@ -361,23 +376,68 @@ export function AddStudentModal({ isOpen, hostelId, onClose, onSuccess }: AddStu
               )}
             </div>
           )}
+
+          {/* STEP 4 - Success & Credentials Display */}
+          {step === 4 && credentials && (
+            <div className="space-y-6 animate-in slide-in-from-right-4 duration-300 flex flex-col items-center justify-center h-full text-center">
+              <div className="h-16 w-16 bg-emerald-100 rounded-full flex items-center justify-center mb-2 shadow-inner">
+                <CheckCircle2 className="h-8 w-8 text-emerald-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Admission Completed</h3>
+                <p className="text-sm text-slate-500 mt-1 pb-4">
+                  The student account has been created securely. The student can log in using these credentials. 
+                </p>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 text-left w-full space-y-3 shadow-inner">
+                  <div>
+                    <span className="text-xs font-bold text-slate-500 uppercase">Username / Email</span>
+                    <div className="mt-1 font-mono text-sm bg-white border border-slate-200 px-3 py-2 rounded-lg font-medium text-slate-900 flex justify-between">
+                      {credentials.email}
+                      <button onClick={() => { navigator.clipboard.writeText(credentials.email); toast.success('Copied username'); }} className="text-blue-600 text-xs font-bold uppercase hover:underline">Copy</button>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-slate-500 uppercase">Generated Password</span>
+                    <div className="mt-1 font-mono text-sm bg-white border border-slate-200 px-3 py-2 rounded-lg font-bold text-rose-600 flex justify-between">
+                      {credentials.password}
+                      <button onClick={() => { navigator.clipboard.writeText(credentials.password); toast.success('Copied password'); }} className="text-blue-600 text-xs font-bold uppercase hover:underline">Copy</button>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-5 text-sm text-slate-500 bg-blue-50/50 p-2 rounded-lg border border-blue-100">
+                  💡 Advise the student to change this password after they log in.
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
         <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
-          <button onClick={() => step > 1 ? setStep(step - 1) : (resetForm(), onClose())} className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
-            {step === 1 ? 'Cancel' : '← Back'}
-          </button>
-          {step < 3 ? (
+          {step < 4 && (
+            <button onClick={() => step > 1 ? setStep(step - 1) : (resetForm(), onClose())} className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
+              {step === 1 ? 'Cancel' : '← Back'}
+            </button>
+          )}
+          {step < 3 && (
             <button onClick={() => {
               if (step === 2 && phoneOTPState !== 'verified') return toast.error('Please verify student phone first.')
               setStep(step + 1)
-            }} className="btn-primary min-w-[120px]">
+            }} className="btn-primary min-w-[120px] ml-auto">
               Continue →
             </button>
-          ) : (
-            <button onClick={handleSave} disabled={saving} className="btn-primary min-w-[150px] flex items-center justify-center gap-2">
+          )}
+          {step === 3 && (
+            <button onClick={handleSave} disabled={saving} className="btn-primary min-w-[150px] flex items-center justify-center gap-2 ml-auto">
               {saving ? <><Loader2 className="animate-spin h-4 w-4" /> Saving...</> : '✓ Save Admission'}
+            </button>
+          )}
+          {step === 4 && (
+            <button onClick={() => {
+              onSuccess()
+              resetForm()
+            }} className="btn-primary min-w-[150px] w-full">
+              Done
             </button>
           )}
         </div>
