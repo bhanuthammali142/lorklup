@@ -17,6 +17,15 @@ serve(async (req) => {
   }
 
   try {
+    // Health check — no auth required
+    const body = await req.json().catch(() => ({}))
+    if (body?.action === 'ping') {
+      return new Response(
+        JSON.stringify({ status: 'ok', version: '1.0' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     // Verify the caller is authenticated
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
@@ -58,7 +67,7 @@ serve(async (req) => {
       })
     }
 
-    const { action, payload } = await req.json()
+    const { action, payload } = body
 
     // ── Action router ─────────────────────────────────────────────────────────
     switch (action) {

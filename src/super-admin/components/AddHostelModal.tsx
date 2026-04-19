@@ -7,9 +7,10 @@
  */
 
 import React, { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   X, Building2, User, Bed, UtensilsCrossed,
-  Eye, EyeOff, CheckCircle2, Loader2, ChevronRight, ChevronLeft, Copy, Check
+  Eye, EyeOff, CheckCircle2, Loader2, ChevronRight, ChevronLeft, Copy, Check, AlertTriangle
 } from 'lucide-react'
 import { createHostelWithOwner } from '../../lib/adminApi'
 import toast from 'react-hot-toast'
@@ -48,7 +49,9 @@ export function AddHostelModal({
     isExistingUser?: boolean
     summary?: string
   } | null>(null)
+  const [deployError, setDeployError] = useState(false)
   const [copied, setCopied] = useState(false)
+  const navigate = useNavigate()
   const [showPass, setShowPass] = useState(false)
 
   const [hostelName, setHostelName] = useState('')
@@ -109,6 +112,7 @@ export function AddHostelModal({
 
   const handleSubmit = async () => {
     setSubmitting(true)
+    setDeployError(false)
     try {
       const result = await createHostelWithOwner({
         ownerEmail,
@@ -129,7 +133,11 @@ export function AddHostelModal({
       })
       toast.success(`Hostel "${hostelName}" created!`)
     } catch (err: any) {
-      toast.error(err.message || 'Failed to create hostel')
+      if (err.message?.includes('Edge Function not deployed') || err.message?.includes('not deployed')) {
+        setDeployError(true)
+      } else {
+        toast.error(err.message || 'Failed to create hostel')
+      }
     } finally {
       setSubmitting(false)
     }
@@ -139,6 +147,40 @@ export function AddHostelModal({
     navigator.clipboard.writeText(`Login: ${done?.email}\nPassword: ${done?.password}`)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  if (deployError) {
+    return (
+      <ModalShell onClose={onClose}>
+        <div className="p-8 text-center space-y-5">
+          <div className="h-16 w-16 bg-rose-100 rounded-2xl flex items-center justify-center mx-auto">
+            <AlertTriangle className="h-8 w-8 text-rose-600" />
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-slate-900">Backend Not Connected</h2>
+            <p className="text-slate-500 text-sm mt-2">
+              The required Edge Function is not currently active on your Supabase instance.
+              Please deploy the function to continue.
+            </p>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="flex-1 py-3 rounded-xl font-bold text-sm bg-slate-100 text-slate-700 hover:bg-slate-200 transition"
+            >
+              {submitting ? 'Retrying...' : 'Retry'}
+            </button>
+            <button
+              onClick={() => { onClose(); navigate('/superadmin/deploy') }}
+              className="flex-1 py-3 rounded-xl font-bold text-sm bg-indigo-600 text-white hover:bg-indigo-700 transition shadow-lg shadow-indigo-500/20"
+            >
+              Open Deploy Guide
+            </button>
+          </div>
+        </div>
+      </ModalShell>
+    )
   }
 
   if (done) {

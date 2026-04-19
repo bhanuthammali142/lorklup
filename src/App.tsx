@@ -46,6 +46,7 @@ const SuperAdminHostels     = lazy(() => import('./super-admin/pages/SuperAdminH
 const SuperAdminSubscriptions = lazy(() => import('./super-admin/pages/SuperAdminSubscriptions').then(m => ({ default: m.SuperAdminSubscriptions })))
 const SuperAdminTickets     = lazy(() => import('./super-admin/pages/SuperAdminTickets').then(m => ({ default: m.SuperAdminTickets })))
 const SuperAdminSettings    = lazy(() => import('./super-admin/pages/SuperAdminSettings').then(m => ({ default: m.SuperAdminSettings })))
+const SuperAdminDeployGuide = lazy(() => import('./super-admin/pages/DeployGuide').then(m => ({ default: m.DeployGuide })))
 
 const Fallback = () => <PageSkeleton />
 
@@ -121,6 +122,7 @@ function App() {
               <Route path="subscriptions" element={<Suspense fallback={<Fallback />}><SuperAdminSubscriptions /></Suspense>} />
               <Route path="tickets"       element={<Suspense fallback={<Fallback />}><SuperAdminTickets /></Suspense>} />
               <Route path="settings"      element={<Suspense fallback={<Fallback />}><SuperAdminSettings /></Suspense>} />
+              <Route path="deploy"        element={<Suspense fallback={<Fallback />}><SuperAdminDeployGuide /></Suspense>} />
               <Route path="*"             element={<Navigate to="dashboard" replace />} />
             </Route>
           </Route>

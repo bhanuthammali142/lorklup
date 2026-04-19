@@ -34,9 +34,40 @@ async function callAdminFunction<T = unknown>(
     })
   } catch (err: any) {
     if (err.message.includes('Failed to fetch')) {
-      throw new Error('Server connection failed: The admin-operations Edge Function may not be deployed. Please deploy it using Supabase CLI.')
+      // TASK 2: SMART LOCAL FALLBACK
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        try {
+          const LOCAL_URL = 'http://localhost:54321/functions/v1/admin-operations'
+          res = await fetch(LOCAL_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ action, payload }),
+          })
+        } catch (localErr: any) {
+          throw new Error(
+            `Edge Function not deployed.\n\nRun:\n` +
+            `1. supabase login\n` +
+            `2. supabase link --project-ref YOUR_PROJECT_ID\n` +
+            `3. supabase secrets set SUPABASE_SERVICE_ROLE_KEY=xxx\n` +
+            `4. supabase functions deploy admin-operations`
+          )
+        }
+      } else {
+        // TASK 1: DETAILED ERROR DEPLOYMENT
+        throw new Error(
+          `Edge Function not deployed.\n\nRun:\n` +
+          `1. supabase login\n` +
+          `2. supabase link --project-ref YOUR_PROJECT_ID\n` +
+          `3. supabase secrets set SUPABASE_SERVICE_ROLE_KEY=xxx\n` +
+          `4. supabase functions deploy admin-operations`
+        )
+      }
+    } else {
+      throw err;
     }
-    throw err
   }
 
   const text = await res.text()

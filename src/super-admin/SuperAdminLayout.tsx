@@ -9,12 +9,14 @@ import {
   ShieldCheck,
   Settings,
   Menu,
+  Terminal,
   X
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { cn } from '../lib/utils'
+import { EdgeFunctionStatus } from '../components/EdgeFunctionStatus'
 
-const NAV = [
+const BASE_NAV = [
   { name: 'Platform Overview', href: '/superadmin/dashboard', icon: LayoutDashboard, end: true },
   { name: 'Hostel Profiles', href: '/superadmin/hostels', icon: Building2, end: false },
   { name: 'Subscriptions', href: '/superadmin/subscriptions', icon: CreditCard, end: false },
@@ -26,12 +28,32 @@ export function SuperAdminLayout() {
   const { signOut, user } = useAuth()
   const initial = user?.email?.charAt(0).toUpperCase() || 'S'
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [edgeOffline, setEdgeOffline] = useState(false)
   const location = useLocation()
   
+  useEffect(() => {
+    const checkEdge = async () => {
+      try {
+        const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-operations`
+        const res = await fetch(url, { method: 'POST', body: JSON.stringify({ action: 'ping' }) })
+        setEdgeOffline(!(res.ok || res.status === 401 || res.status === 403))
+      } catch {
+        setEdgeOffline(true)
+      }
+    }
+    checkEdge()
+    const interval = setInterval(checkEdge, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
   // Close mobile menu on route change
   useEffect(() => {
     setMobileMenuOpen(false)
   }, [location.pathname])
+
+  const NAV = edgeOffline 
+    ? [...BASE_NAV, { name: 'Deploy Guide', href: '/superadmin/deploy', icon: Terminal, end: false }] 
+    : BASE_NAV
 
   const SidebarContent = ({ isMobile, onClose }: { isMobile?: boolean, onClose?: () => void }) => (
     <div className="flex flex-col h-full bg-slate-950 border-r border-slate-800 relative shadow-2xl">
@@ -134,6 +156,7 @@ export function SuperAdminLayout() {
             </h1>
           </div>
           <div className="flex items-center gap-4">
+            <EdgeFunctionStatus />
             <div className="hidden sm:flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 rounded-full px-2.5 py-1">
               <ShieldCheck className="h-3 w-3 text-indigo-600" />
               <span className="text-[10px] font-bold text-indigo-700">HQ Access</span>
