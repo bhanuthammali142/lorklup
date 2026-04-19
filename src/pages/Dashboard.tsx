@@ -63,9 +63,13 @@ export function Dashboard() {
             <AlertCircle className="h-4 w-4 text-orange-500" />
             {stats.overdueFees > 0 ? 'Overdue Fees!' : 'No Alerts'}
           </button>
-          <button onClick={() => toast.success('Connecting to Gemini AI...')} className="flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:shadow hover:bg-blue-700 transition-all">
+          <button
+            onClick={() => toast('AI insights require a Gemini API key. Add VITE_GEMINI_KEY to .env.local to enable.', { icon: '🤖', duration: 5000 })}
+            className="flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:shadow hover:bg-blue-700 transition-all opacity-70 cursor-not-allowed"
+            title="Configure Gemini API key to enable"
+          >
             <Sparkles className="h-4 w-4" />
-            AI Insights
+            AI Insights (Configure)
           </button>
         </div>
       </div>
@@ -153,14 +157,14 @@ export function Dashboard() {
               <div className="rounded-lg bg-rose-50 border border-rose-100 p-4">
                 <h4 className="font-semibold text-rose-900 text-sm">⚠️ Overdue Fees</h4>
                 <p className="text-sm text-rose-700 mt-1">{fmt(stats.overdueFees)} in overdue payments. Send WhatsApp reminders now.</p>
-                <button onClick={() => toast.success('Sending WhatsApp reminders...')} className="mt-3 text-xs font-semibold bg-rose-600 text-white px-3 py-1.5 rounded hover:bg-rose-700 transition">Send Reminders</button>
+                <button disabled className="mt-3 text-xs font-semibold bg-rose-300 text-white px-3 py-1.5 rounded opacity-60 cursor-not-allowed" title="Integrate WhatsApp API to enable">Send Reminders (API Required)</button>
               </div>
             )}
             {stats.pendingFees > 0 && (
               <div className="rounded-lg bg-blue-50 border border-blue-100 p-4">
                 <h4 className="font-semibold text-blue-900 text-sm">📋 Pending Collection</h4>
                 <p className="text-sm text-blue-700 mt-1">{fmt(stats.pendingFees)} pending this month. Follow up with students.</p>
-                <button onClick={() => toast.success('Executing automated WhatsApp reminders...')} className="mt-3 text-xs font-semibold bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition">Execute Now</button>
+                <button disabled className="mt-3 text-xs font-semibold bg-blue-300 text-white px-3 py-1.5 rounded opacity-60 cursor-not-allowed" title="Integrate WhatsApp API to enable">Execute Now (API Required)</button>
               </div>
             )}
             {stats.pendingFees === 0 && stats.overdueFees === 0 && (

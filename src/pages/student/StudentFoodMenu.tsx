@@ -43,7 +43,7 @@ export function StudentFoodMenu() {
     if (!studentData?.hostel_id) return
     // Try to load from food_menu table if it exists
     supabase
-      .from('food_menu')
+      .from('food_menus')
       .select('*')
       .eq('hostel_id', studentData.hostel_id)
       .maybeSingle()

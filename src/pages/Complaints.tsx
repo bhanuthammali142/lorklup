@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { MessageSquareWarning, Clock, Wrench, CheckCircle2, Loader2, AlertTriangle, AlertCircle, AlertOctagon } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { getOrCreateHostel, getComplaints, updateComplaintStatus } from '../lib/api'
@@ -16,29 +17,34 @@ function PriorityBadge({ priority }: { priority: string }) {
 export function Complaints() {
   const { user } = useAuth()
   const [hostelId, setHostelId] = useState<string | null>(null)
-  const [complaints, setComplaints] = useState<Complaint[]>([])
-  const [loading, setLoading] = useState(true)
+  // Remove local complaints state, use React Query
+  // Removed duplicate loading state; use React Query loading only
 
-  const fetchData = async (hId: string) => {
-    setLoading(true)
-    try {
-      const data = await getComplaints(hId)
-      setComplaints(data as Complaint[])
-    } finally {
-      setLoading(false)
-    }
-  }
+
+  // React Query: fetch complaints
+  const queryClient = useQueryClient()
+  const {
+    data: complaintsData = [],
+    isLoading,
+    isFetching,
+    refetch
+  } = useQuery({
+    queryKey: ['complaints', hostelId],
+    queryFn: () => hostelId ? getComplaints(hostelId) : Promise.resolve([]),
+    enabled: !!hostelId,
+    staleTime: 1000 * 60 * 2,
+  })
 
   useEffect(() => {
     if (!user) return
-    getOrCreateHostel(user.id).then(h => { if (h) { setHostelId(h.id); fetchData(h.id) } })
+    getOrCreateHostel(user.id).then(h => { if (h) setHostelId(h.id) })
   }, [user])
 
   const handleUpdateStatus = async (id: string, newStatus: string) => {
     try {
       await updateComplaintStatus(id, { status: newStatus })
       toast.success('Status updated!')
-      if (hostelId) fetchData(hostelId)
+      queryClient.invalidateQueries({ queryKey: ['complaints', hostelId] })
     } catch {
       toast.error('Failed to update status.')
     }
@@ -49,6 +55,9 @@ export function Complaints() {
     { title: 'In Progress', status: 'in-progress', icon: Wrench, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200' },
     { title: 'Resolved', status: 'resolved', icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200' }
   ]
+
+  // Use React Query loading state
+  const loading = isLoading || isFetching
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -66,7 +75,7 @@ export function Complaints() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
           {columns.map(col => {
-            const colItems = complaints.filter(c => c.status === col.status)
+            const colItems = complaintsData.filter(c => c.status === col.status)
             const Icon = col.icon
             return (
               <div key={col.status} className="card-premium flex flex-col h-full bg-slate-50/50">

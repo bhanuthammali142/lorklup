@@ -1,18 +1,6 @@
 // @ts-nocheck
-/**
- * STUDENT PORTAL — Layout
- * ─────────────────────────────────────────────────────────────────
- * TEAM RULES (NON-NEGOTIABLE):
- *   1. NEVER import from /admin/* — student and admin are isolated modules
- *   2. NEVER show hostel-wide data (no total students, no all-fees, no all-complaints)
- *   3. All data must be filtered by student's own student_id or hostel_id (read-only)
- *   4. Student can: view announcements, view food menu, pay fees, raise complaints
- *   5. Student CANNOT: see other students, change hostel settings, view analytics
- * ─────────────────────────────────────────────────────────────────
- */
-
-import React from 'react'
-import { Outlet, NavLink } from 'react-router-dom'
+import React, { useState, useEffect } from 'react'
+import { Outlet, NavLink, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
   Wallet,
@@ -22,10 +10,11 @@ import {
   Bell,
   UtensilsCrossed,
   ShieldCheck,
+  Menu,
+  X
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
 import { cn } from '../lib/utils'
-
 
 const NAV = [
   { name: 'Home',        href: '/student/dashboard',      icon: LayoutDashboard,      end: true },
@@ -39,10 +28,17 @@ const NAV = [
 export function StudentLayout() {
   const { signOut, studentData, user } = useAuth()
   const initial = studentData?.full_name?.charAt(0)?.toUpperCase() || 'S'
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const location = useLocation()
+  
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileMenuOpen(false)
+  }, [location.pathname])
 
   if (!studentData) {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-slate-50 flex-col gap-4 p-6 text-center">
+      <div className="h-screen w-full flex items-center justify-center bg-[#fcfcfd] flex-col gap-4 p-6 text-center">
         <div className="h-16 w-16 bg-rose-100 rounded-full flex items-center justify-center mb-2">
           <MessageSquareWarning className="h-8 w-8 text-rose-600" />
         </div>
@@ -50,136 +46,127 @@ export function StudentLayout() {
         <p className="text-slate-500 max-w-md">
           You are logged in, but the database's <strong>Row Level Security (RLS)</strong> policies are blocking you from seeing your own student profile.
         </p>
-        <div className="mt-4 bg-white border border-slate-200 p-4 rounded-xl text-left text-sm text-slate-600 w-full max-w-md shadow-sm">
-          <p className="font-bold text-slate-900 mb-1">To fix this issue:</p>
-          <ol className="list-decimal pl-5 space-y-1.5">
-            <li>Go to your Supabase Dashboard &gt; SQL Editor.</li>
-            <li>Open the file <code>supabase_migration_profiles.sql</code> from your code editor.</li>
-            <li>Paste all the SQL into Supabase and click <strong>Run</strong>.</li>
-            <li>Refresh this page.</li>
-          </ol>
-        </div>
-        <button onClick={signOut} className="mt-4 px-6 py-2.5 bg-slate-900 text-white rounded-xl font-semibold hover:bg-slate-800 transition">
+        <button onClick={signOut} className="mt-4 btn-primary">
           Sign Out
         </button>
       </div>
     )
   }
 
-  return (
-    <div className="flex h-screen bg-slate-50 flex-col md:flex-row overflow-hidden">
-
-      {/* ── Mobile Header ─────────────────────────────── */}
-      <header className="md:hidden bg-gradient-to-r from-slate-900 to-slate-800 text-white px-4 py-3 flex justify-between items-center shadow-lg z-30 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center font-black text-sm shadow">
-            {initial}
+  const SidebarContent = ({ isMobile, onClose }: { isMobile?: boolean, onClose?: () => void }) => (
+    <div className="flex h-full flex-col w-64 bg-white border-r border-slate-200">
+      {/* Logo */}
+      <div className="px-5 py-4 h-14 md:h-16 border-b border-slate-100 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-2.5">
+          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-[#2563eb] to-indigo-600 flex items-center justify-center shrink-0 shadow-lg">
+            <ShieldCheck className="h-4 w-4 text-white" />
           </div>
-          <div>
-            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-widest leading-none">Student Portal</p>
-            <p className="text-sm font-bold leading-tight">{studentData?.full_name?.split(' ')[0] || 'Student'}</p>
-          </div>
+          <span className="text-lg font-black text-slate-900 tracking-tight">HostelOS</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 bg-emerald-500/20 border border-emerald-500/30 rounded-full px-2.5 py-1">
-            <ShieldCheck className="h-3 w-3 text-emerald-400" />
-            <span className="text-[10px] font-bold text-emerald-400">Verified</span>
-          </div>
-          <button onClick={signOut} className="p-2 hover:bg-slate-700 rounded-xl transition">
-            <LogOut className="h-4 w-4 text-slate-400" />
+        {isMobile && (
+          <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100">
+            <X className="h-5 w-5" />
           </button>
-        </div>
-      </header>
-
-      {/* ── Desktop Sidebar ───────────────────────────── */}
-      <aside className="hidden md:flex w-64 bg-gradient-to-b from-slate-900 to-slate-950 flex-col shrink-0 border-r border-slate-800">
-        {/* Logo */}
-        <div className="px-5 py-6 border-b border-slate-800">
-          <div className="flex items-center gap-2.5 mb-3">
-            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shrink-0 shadow-lg">
-              <ShieldCheck className="h-4 w-4 text-white" />
-            </div>
-            <span className="text-lg font-black text-white tracking-tight">HostelOS</span>
-          </div>
-          <div className="bg-slate-800/60 rounded-xl p-3 flex items-center gap-3">
-            <div className="h-9 w-9 rounded-full bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center font-black text-white shrink-0">
-              {initial}
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-bold text-white truncate">{studentData?.full_name || 'Student'}</p>
-              <p className="text-[11px] text-slate-400 truncate">
-                {studentData?.rooms ? `${studentData.rooms.floor || 'Floor'} · Rm ${studentData.rooms.room_number}` : 'Room —'} · Bed {studentData?.beds?.bed_number ?? '—'}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {NAV.map((item) => (
-            <NavLink
-              key={item.name}
-              to={item.href}
-              end={item.end}
-              className={({ isActive }) => cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150',
-                isActive
-                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40'
-                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-              )}
-            >
-              <item.icon className="h-4.5 w-4.5 shrink-0" />
-              {item.name}
-            </NavLink>
-          ))}
-        </nav>
-
-        {/* Sign Out */}
-        <div className="p-3 border-t border-slate-800">
-          <button
-            onClick={signOut}
-            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-          >
-            <LogOut className="h-4 w-4" />
-            Sign Out
-          </button>
-        </div>
-      </aside>
-
-      {/* ── Main Content ──────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto">
-        <main className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto w-full min-h-full pb-24 md:pb-8">
-          <Outlet />
-        </main>
+        )}
       </div>
 
-      {/* ── Mobile Bottom Tab Bar ─────────────────────── */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] z-30">
-        <div className="flex justify-around items-center px-1 py-2">
-          {NAV.map((item) => (
-            <NavLink
-              key={item.name}
-              to={item.href}
-              end={item.end}
-              className={({ isActive }) => cn(
-                'flex flex-col items-center justify-center px-2 py-1.5 rounded-2xl transition-all min-w-[3.5rem]',
-                isActive ? 'text-blue-600' : 'text-slate-400 hover:text-slate-700'
-              )}
-            >
-              {({ isActive }) => (
-                <>
-                  <div className={cn('p-1.5 rounded-xl mb-0.5 transition-all', isActive ? 'bg-blue-50' : '')}>
-                    <item.icon className="h-5 w-5" />
-                  </div>
-                  <span className={cn('text-[9px] font-bold leading-none', isActive ? 'text-blue-600' : 'text-slate-400')}>
-                    {item.name}
-                  </span>
-                </>
-              )}
-            </NavLink>
-          ))}
+      <div className="px-4 py-4 border-b border-slate-100">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center font-black text-blue-700 shrink-0 border border-blue-200">
+            {initial}
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-slate-900 truncate">{studentData?.full_name || 'Student'}</p>
+            <p className="text-[11px] text-slate-500 truncate">
+              {studentData?.rooms ? `${studentData.rooms.floor || 'Floor'} · Rm ${studentData.rooms.room_number}` : 'Room —'} · Bed {studentData?.beds?.bed_number ?? '—'}
+            </p>
+          </div>
         </div>
+      </div>
+
+      {/* Nav */}
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto w-full">
+        {NAV.map((item) => (
+          <NavLink
+            key={item.name}
+            to={item.href}
+            end={item.end}
+            className={({ isActive }) => cn(
+              'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 min-h-[44px]',
+              isActive
+                ? 'bg-[#2563eb] text-white shadow-md shadow-blue-500/20'
+                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+            )}
+          >
+            <item.icon className="h-4.5 w-4.5 shrink-0" />
+            {item.name}
+          </NavLink>
+        ))}
       </nav>
+
+      {/* Sign Out */}
+      <div className="p-4 border-t border-slate-100">
+        <button
+          onClick={signOut}
+          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-semibold text-rose-600 hover:bg-rose-50 transition-colors min-h-[44px]"
+        >
+          <LogOut className="h-4 w-4 shrink-0" />
+          Sign Out
+        </button>
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="flex h-screen bg-[#fcfcfd] relative overflow-hidden text-[#111827]">
+      
+      {/* Desktop Sidebar */}
+      <div className="hidden md:block z-20">
+        <SidebarContent />
+      </div>
+
+      {/* Mobile Sidebar Overlay */}
+      {mobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 md:hidden" 
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Mobile Sidebar Drawer */}
+      <div className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 md:hidden w-64 bg-white ${mobileMenuOpen ? 'translate-x-0 cursor-default shadow-2xl' : '-translate-x-full'}`}>
+        <SidebarContent isMobile onClose={() => setMobileMenuOpen(false)} />
+      </div>
+
+      <div className="flex-1 flex flex-col h-screen overflow-hidden">
+        {/* Top Navbar */}
+        <header className="flex h-14 md:h-16 items-center justify-between px-4 sm:px-6 md:px-8 border-b border-slate-200/60 bg-white/90 backdrop-blur-xl z-30 shrink-0">
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setMobileMenuOpen(true)}
+              className="md:hidden p-2 -ml-2 rounded-lg text-slate-500 hover:bg-slate-100"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <h1 className="text-lg font-bold text-slate-900 hidden sm:block">
+              {NAV.find(n => n.href === location.pathname)?.name || 'Dashboard'}
+            </h1>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="hidden sm:flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1">
+              <ShieldCheck className="h-3 w-3 text-emerald-600" />
+              <span className="text-[10px] font-bold text-emerald-700">Verified</span>
+            </div>
+          </div>
+        </header>
+
+        {/* Main Content Area */}
+        <main className="flex-1 overflow-y-auto">
+          <div className="max-w-[1440px] px-4 sm:px-6 md:px-8 py-6 sm:py-8 mx-auto w-full">
+            <Outlet />
+          </div>
+        </main>
+      </div>
     </div>
   )
 }

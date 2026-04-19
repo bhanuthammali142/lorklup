@@ -12,15 +12,19 @@ dist
 dist-ssr
 *.local
 
-# Environment files (NEVER commit secrets)
+# Environment files — NEVER commit these
 .env
-.env.*
-!.env.example
+.env.local
+.env.*.local
+.env.development
+.env.production
 
-# Scripts that may reference service role keys
+# Migration/admin scripts that may contain credentials
 run-migration.mjs
-query.js
 db-check.mjs
+query.js
+*.seed.mjs
+*.seed.js
 
 # Editor directories and files
 .vscode/*
@@ -32,3 +36,7 @@ db-check.mjs
 *.njsproj
 *.sln
 *.sw?
+
+# Supabase local dev
+supabase/.branches
+supabase/.temp

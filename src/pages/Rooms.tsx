@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Search, Loader2, Edit2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '../lib/utils'
@@ -12,9 +13,10 @@ interface RoomData { id: string; room_number: string; floor: string | null; type
 export function Rooms() {
   const { user } = useAuth()
   const [hostelId, setHostelId] = useState<string | null>(null)
-  const [rooms, setRooms] = useState<RoomData[]>([])
-  const [loading, setLoading] = useState(true)
+  // Remove local rooms state, use React Query
+  // Removed duplicate loading state; use React Query loading only
   const [filter, setFilter] = useState('All')
+  const [searchRooms, setSearchRooms] = useState('')
 
   // Modals state
   const [showAddRoom, setShowAddRoom] = useState(false)
@@ -26,18 +28,24 @@ export function Rooms() {
   
   const [saving, setSaving] = useState(false)
 
-  const fetchData = async (hId: string) => {
-    setLoading(true)
-    const data = await getRoomsWithBeds(hId)
-    // Map the relationships properly just in case Supabase returns it weirdly
-    // Actually, `students?.[0]?.full_name` usually works for nested joins
-    setRooms(data as RoomData[])
-    setLoading(false)
-  }
+
+  // React Query: fetch rooms
+  const queryClient = useQueryClient()
+  const {
+    data: roomsData = [],
+    isLoading,
+    isFetching,
+    refetch
+  } = useQuery({
+    queryKey: ['rooms', hostelId],
+    queryFn: () => hostelId ? getRoomsWithBeds(hostelId) : Promise.resolve([]),
+    enabled: !!hostelId,
+    staleTime: 1000 * 60 * 2, // 2 minutes
+  })
 
   useEffect(() => {
     if (!user) return
-    getOrCreateHostel(user.id).then(h => { if (h) { setHostelId(h.id); fetchData(h.id) } })
+    getOrCreateHostel(user.id).then(h => { if (h) setHostelId(h.id) })
   }, [user])
 
   const handleAddRoom = async () => {
@@ -49,7 +57,7 @@ export function Rooms() {
       toast.success(`Room ${newRoom.room_number} created with ${newRoom.capacity} beds!`)
       setShowAddRoom(false)
       setNewRoom({ room_number: '', floor: '', capacity: 3, type: 'Non-AC', monthly_fee: 5000 })
-      fetchData(hostelId)
+      queryClient.invalidateQueries({ queryKey: ['rooms', hostelId] })
     } catch (e: any) { toast.error(e.message) }
     finally { setSaving(false) }
   }
@@ -61,7 +69,7 @@ export function Rooms() {
       await updateRoom(editRoomData.id, editForm)
       toast.success(`Room ${editForm.room_number} updated successfully!`)
       setEditRoomData(null)
-      if (hostelId) fetchData(hostelId)
+      queryClient.invalidateQueries({ queryKey: ['rooms', hostelId] })
     } catch (e: any) { toast.error(e.message) }
     finally { setSaving(false) }
   }
@@ -77,9 +85,18 @@ export function Rooms() {
     })
   }
 
-  const floors = [...new Set(rooms.map(r => r.floor).filter(Boolean))]
+  const floors = [...new Set(roomsData.map(r => r.floor).filter(Boolean))]
   const filterOptions = ['All', ...floors as string[]]
-  const filtered = rooms.filter(r => filter === 'All' || r.floor === filter)
+  const filtered = roomsData
+    .filter(r => filter === 'All' || r.floor === filter)
+    .filter(r =>
+      !searchRooms ||
+      r.room_number.toLowerCase().includes(searchRooms.toLowerCase()) ||
+      (r.floor ?? '').toLowerCase().includes(searchRooms.toLowerCase())
+    )
+
+  // Use React Query loading state
+  const loading = isLoading || isFetching
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -181,7 +198,13 @@ export function Rooms() {
         </div>
         <div className="relative w-52 hidden sm:block">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <input type="text" placeholder="Search room..." className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <input
+            type="text"
+            placeholder="Search room or floor..."
+            value={searchRooms}
+            onChange={e => setSearchRooms(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
         </div>
       </div>
 

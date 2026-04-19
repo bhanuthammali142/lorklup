@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Search, Filter, MoreVertical, FileText, Trash2, Loader2, Eye, X, CheckCircle2, AlertCircle, Building2, Phone, Calendar, CreditCard, ImageOff } from 'lucide-react'
 import { AddStudentModal } from '../components/AddStudentModal'
 import { useAuth } from '../lib/AuthContext'
@@ -10,23 +11,32 @@ import toast from 'react-hot-toast'
 export function Students() {
   const { user } = useAuth()
   const [hostelId, setHostelId] = useState<string | null>(null)
-  const [students, setStudents] = useState<Student[]>([])
-  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [filterVerified, setFilterVerified] = useState<'all' | 'verified' | 'unverified'>('all')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null)
 
-  const fetchData = async (hId: string) => {
-    setLoading(true)
-    const data = await getStudents(hId)
-    setStudents(data)
-    setLoading(false)
-  }
+
+  // React Query: fetch students
+  const queryClient = useQueryClient()
+  const {
+    data: studentsData = [],
+    isLoading,
+    isFetching,
+    refetch
+  } = useQuery({
+    queryKey: ['students', hostelId],
+    queryFn: () => hostelId ? getStudents(hostelId) : Promise.resolve([]),
+    enabled: !!hostelId,
+    staleTime: 1000 * 60 * 2, // 2 minutes
+  })
+
+  const loading = isLoading || isFetching
 
   useEffect(() => {
     if (!user) return
     getOrCreateHostel(user.id).then(h => {
-      if (h) { setHostelId(h.id); fetchData(h.id) }
+      if (h) setHostelId(h.id)
     })
   }, [user])
 
@@ -35,22 +45,29 @@ export function Students() {
     try {
       await deleteStudent(id)
       toast.success(`${name} removed and bed freed.`)
-      if (hostelId) fetchData(hostelId)
+      // Invalidate and refetch students
+      queryClient.invalidateQueries({ queryKey: ['students', hostelId] })
     } catch { toast.error('Failed to delete student.') }
   }
 
   const handleExport = () => {
-    if (students.length === 0) return toast.error('No students to export.')
-    exportStudentsCSV(students)
-    toast.success(`Exported ${students.length} students to CSV.`)
+    if (studentsData.length === 0) return toast.error('No students to export.')
+    exportStudentsCSV(studentsData)
+    toast.success(`Exported ${studentsData.length} students to CSV.`)
   }
 
-  const filtered = students.filter(s =>
-    s.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.phone.includes(searchTerm) ||
-    s.college_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.id_number?.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const filtered = studentsData
+    .filter(s =>
+      s.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.phone.includes(searchTerm) ||
+      (s.college_name ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (s.id_number ?? '').toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .filter(s => {
+      if (filterVerified === 'verified')   return s.is_verified
+      if (filterVerified === 'unverified') return !s.is_verified
+      return true
+    })
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -58,7 +75,7 @@ export function Students() {
         isOpen={isModalOpen}
         hostelId={hostelId}
         onClose={() => setIsModalOpen(false)}
-        onSuccess={() => { setIsModalOpen(false); if (hostelId) fetchData(hostelId) }}
+        onSuccess={() => { setIsModalOpen(false); queryClient.invalidateQueries({ queryKey: ['students', hostelId] }) }}
       />
 
       {/* Student Profile Drawer */}
@@ -177,9 +194,18 @@ export function Students() {
                 className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm" />
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 border border-slate-200 rounded-lg px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
-                <Filter className="h-4 w-4" />Filters
-              </button>
+              <div className="relative">
+                <select
+                  value={filterVerified}
+                  onChange={e => setFilterVerified(e.target.value as typeof filterVerified)}
+                  className="flex-1 sm:flex-none appearance-none border border-slate-200 rounded-lg pl-9 pr-8 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 bg-white transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">All Students</option>
+                  <option value="verified">Verified Only</option>
+                  <option value="unverified">Unverified Only</option>
+                </select>
+                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+              </div>
               <button onClick={handleExport} className="flex-1 sm:flex-none flex items-center justify-center gap-2 border border-slate-200 rounded-lg px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
                 <FileText className="h-4 w-4" />Export CSV
               </button>
@@ -197,8 +223,48 @@ export function Students() {
             <p className="text-sm">{!searchTerm && 'Click "Add Student" to get started.'}</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm whitespace-nowrap">
+          <div className="md:overflow-x-auto">
+            {/* Mobile Cards View */}
+            <div className="grid grid-cols-1 gap-4 md:hidden p-4 bg-slate-50/30">
+              {filtered.map((student) => (
+                <div key={student.id} onClick={() => setSelectedStudent(student)} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3 cursor-pointer hover:border-blue-300 transition-colors">
+                   <div className="flex justify-between items-start">
+                     <div className="flex items-center gap-3">
+                       <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 text-white flex items-center justify-center font-bold uppercase flex-shrink-0">
+                         {student.full_name.charAt(0)}
+                       </div>
+                       <div className="flex flex-col min-w-[120px]">
+                         <span className="font-semibold text-slate-900 truncate">{student.full_name}</span>
+                         <span className="text-xs text-slate-500 truncate">{student.id_number ? `${student.id_number} · ` : ''}{student.phone}</span>
+                       </div>
+                     </div>
+                     {student.is_verified
+                        ? <span className="inline-flex shrink-0 items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><CheckCircle2 className="h-3 w-3" />Verified</span>
+                        : <span className="inline-flex shrink-0 items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200"><AlertCircle className="h-3 w-3" />Pending</span>
+                     }
+                   </div>
+                   <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-100">
+                     <div className="flex flex-col">
+                       <span className="text-slate-400 font-medium">College</span>
+                       <span className="text-slate-700 font-semibold truncate">{student.college_name || '—'}</span>
+                     </div>
+                     <div className="flex flex-col">
+                       <span className="text-slate-400 font-medium">Room</span>
+                       <span className="text-slate-700 font-semibold truncate">
+                         {(student as any).rooms?.room_number ?? 'Unassigned'} {(student as any).beds ? `· Bed ${(student as any).beds.bed_number}` : ''}
+                       </span>
+                     </div>
+                   </div>
+                   <div className="flex justify-end gap-2 pt-2">
+                     <button onClick={(e) => { e.stopPropagation(); setSelectedStudent(student) }} className="p-1.5 px-3 text-xs font-semibold text-blue-600 bg-blue-50 rounded-lg">View</button>
+                     <button onClick={(e) => { e.stopPropagation(); handleDelete(student.id, student.full_name) }} className="p-1.5 px-3 text-xs font-semibold text-rose-600 bg-rose-50 rounded-lg">Delete</button>
+                   </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table View */}
+            <table className="w-full text-left text-sm whitespace-nowrap hidden md:table">
               <thead className="bg-slate-50/50 text-slate-500 uppercase text-xs font-semibold border-b border-slate-100">
                 <tr>
                   <th className="px-6 py-4">Student</th>
@@ -262,8 +328,8 @@ export function Students() {
         )}
 
         <div className="p-4 border-t border-slate-100 flex items-center justify-between text-sm text-slate-500">
-          <span>Showing {filtered.length} of {students.length} students</span>
-          {students.length > 0 && (
+          <span>Showing {filtered.length} of {studentsData.length} students</span>
+          {studentsData.length > 0 && (
             <button onClick={handleExport} className="text-blue-600 hover:underline text-xs">Download CSV</button>
           )}
         </div>

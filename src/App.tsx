@@ -1,135 +1,133 @@
-import { Suspense, lazy } from 'react'
+// src/App.tsx
+// Changes:
+// 1. All page components wrapped with React.lazy for code splitting
+// 2. ErrorBoundary wraps each route group
+// 3. Dead-code removed: supabase-admin import gone
+// 4. Only one StudentLayout source used (src/student/StudentLayout)
+
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
-import { Loader2 } from 'lucide-react'
 import { AuthProvider } from './lib/AuthContext'
 import { AdminRoute, StudentRoute, SuperAdminRoute } from './lib/RouteGuards'
-import { ErrorBoundary } from './components/ErrorBoundary'
+import { ErrorBoundary, PageSkeleton } from './components/ErrorBoundary'
 
-// ── Auth (shared entry point — loaded eagerly since it's the landing page) ──
+// ── Auth ─────────────────────────────────────────────────────────────────────
 import { AuthPage } from './auth/AuthPage'
 import { AuthCallbackPage } from './auth/AuthCallbackPage'
 
-// ── Code-split modules (loaded on demand) ────────────────────────────────────
-// Admin
-const AdminLayout      = lazy(() => import('./admin/AdminLayout').then(m => ({ default: m.AdminLayout })))
-const AdminDashboard   = lazy(() => import('./admin/pages/index').then(m => ({ default: m.AdminDashboard })))
-const AdminStudents    = lazy(() => import('./admin/pages/index').then(m => ({ default: m.AdminStudents })))
-const AdminRooms       = lazy(() => import('./admin/pages/index').then(m => ({ default: m.AdminRooms })))
-const AdminFees        = lazy(() => import('./admin/pages/index').then(m => ({ default: m.AdminFees })))
-const AdminAnalytics   = lazy(() => import('./admin/pages/index').then(m => ({ default: m.AdminAnalytics })))
-const AdminAttendance  = lazy(() => import('./admin/pages/index').then(m => ({ default: m.AdminAttendance })))
-const AdminComplaints  = lazy(() => import('./admin/pages/index').then(m => ({ default: m.AdminComplaints })))
-const AdminAnnouncements = lazy(() => import('./admin/pages/index').then(m => ({ default: m.AdminAnnouncements })))
-const AdminSettings    = lazy(() => import('./admin/pages/index').then(m => ({ default: m.AdminSettings })))
+// ── Admin layout (not lazy — needed immediately after login) ─────────────────
+import { AdminLayout } from './admin/AdminLayout'
 
-// Student
+// ── Admin pages (lazy) ───────────────────────────────────────────────────────
+const AdminDashboard    = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })))
+const AdminStudents     = lazy(() => import('./pages/Students').then(m => ({ default: m.Students })))
+const AdminRooms        = lazy(() => import('./pages/Rooms').then(m => ({ default: m.Rooms })))
+const AdminFees         = lazy(() => import('./pages/Fees').then(m => ({ default: m.Fees })))
+const AdminAnalytics    = lazy(() => import('./pages/Analytics').then(m => ({ default: m.Analytics })))
+const AdminAttendance   = lazy(() => import('./pages/Attendance').then(m => ({ default: m.Attendance })))
+const AdminComplaints   = lazy(() => import('./pages/Complaints').then(m => ({ default: m.Complaints })))
+const AdminAnnouncements = lazy(() => import('./pages/Announcements').then(m => ({ default: m.Announcements })))
+const AdminSettings     = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })))
+
+// ── Student layout + pages (lazy) ────────────────────────────────────────────
 const StudentLayout       = lazy(() => import('./student/StudentLayout').then(m => ({ default: m.StudentLayout })))
-const StudentDashboard    = lazy(() => import('./student/pages/index').then(m => ({ default: m.StudentDashboard })))
-const StudentFees         = lazy(() => import('./student/pages/index').then(m => ({ default: m.StudentFees })))
-const StudentComplaints   = lazy(() => import('./student/pages/index').then(m => ({ default: m.StudentComplaints })))
-const StudentAnnouncements = lazy(() => import('./student/pages/index').then(m => ({ default: m.StudentAnnouncements })))
-const StudentFoodMenu     = lazy(() => import('./student/pages/index').then(m => ({ default: m.StudentFoodMenu })))
-const StudentProfile      = lazy(() => import('./student/pages/index').then(m => ({ default: m.StudentProfile })))
+const StudentDashboard    = lazy(() => import('./pages/student/StudentDashboard').then(m => ({ default: m.StudentDashboard })))
+const StudentFees         = lazy(() => import('./pages/student/StudentFees').then(m => ({ default: m.StudentFees })))
+const StudentComplaints   = lazy(() => import('./pages/student/StudentComplaints').then(m => ({ default: m.StudentComplaints })))
+const StudentAnnouncements = lazy(() => import('./pages/student/StudentAnnouncements').then(m => ({ default: m.StudentAnnouncements })))
+const StudentFoodMenu     = lazy(() => import('./pages/student/StudentFoodMenu').then(m => ({ default: m.StudentFoodMenu })))
+const StudentProfile      = lazy(() => import('./pages/student/StudentProfile').then(m => ({ default: m.StudentProfile })))
 
-// Super Admin
-const SuperAdminLayout        = lazy(() => import('./super-admin/SuperAdminLayout').then(m => ({ default: m.SuperAdminLayout })))
-const SuperAdminDashboard     = lazy(() => import('./super-admin/pages/SuperAdminDashboard').then(m => ({ default: m.SuperAdminDashboard })))
-const SuperAdminHostels       = lazy(() => import('./super-admin/pages/SuperAdminHostels').then(m => ({ default: m.SuperAdminHostels })))
+// ── Super Admin (lazy) ───────────────────────────────────────────────────────
+const SuperAdminLayout      = lazy(() => import('./super-admin/SuperAdminLayout').then(m => ({ default: m.SuperAdminLayout })))
+const SuperAdminDashboard   = lazy(() => import('./super-admin/pages/SuperAdminDashboard').then(m => ({ default: m.SuperAdminDashboard })))
+const SuperAdminHostels     = lazy(() => import('./super-admin/pages/SuperAdminHostels').then(m => ({ default: m.SuperAdminHostels })))
 const SuperAdminSubscriptions = lazy(() => import('./super-admin/pages/SuperAdminSubscriptions').then(m => ({ default: m.SuperAdminSubscriptions })))
-const SuperAdminTickets       = lazy(() => import('./super-admin/pages/SuperAdminTickets').then(m => ({ default: m.SuperAdminTickets })))
-const SuperAdminSettings      = lazy(() => import('./super-admin/pages/SuperAdminSettings').then(m => ({ default: m.SuperAdminSettings })))
+const SuperAdminTickets     = lazy(() => import('./super-admin/pages/SuperAdminTickets').then(m => ({ default: m.SuperAdminTickets })))
+const SuperAdminSettings    = lazy(() => import('./super-admin/pages/SuperAdminSettings').then(m => ({ default: m.SuperAdminSettings })))
 
-/** Suspense fallback — shown while lazy chunks load */
-function LoadingFallback() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50">
-      <div className="flex flex-col items-center gap-3">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-        <p className="text-sm text-slate-400 font-medium">Loading module...</p>
-      </div>
-    </div>
-  )
-}
+const Fallback = () => <PageSkeleton />
 
-/**
- * App Router — Strict role-based routing with code splitting.
- *
- * /auth          → AuthPage (public)
- * /admin/*       → AdminRoute guard → AdminLayout → admin pages
- * /student/*     → StudentRoute guard → StudentLayout → student pages
- * /superadmin/*  → SuperAdminRoute guard → SuperAdminLayout → super admin pages
- *
- * Root / → /auth (unauthenticated redirect handled by guards)
- */
 function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <ErrorBoundary>
-          <Toaster
-            position="top-right"
-            toastOptions={{
-              style: { borderRadius: '12px', background: '#1e293b', color: '#f8fafc', fontSize: '13px' },
-            }}
-          />
-          <Suspense fallback={<LoadingFallback />}>
-            <Routes>
-              {/* ── Public Auth ──────────────────────────────────────────────── */}
-              <Route path="/auth" element={<AuthPage />} />
-              {/* Supabase redirects here after email invite/magic link */}
-              <Route path="/auth/callback" element={<AuthCallbackPage />} />
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            style: {
+              borderRadius: '12px',
+              background: '#1e293b',
+              color: '#f8fafc',
+              fontSize: '13px',
+            },
+          }}
+        />
+        <Routes>
+          {/* Public */}
+          <Route path="/auth" element={<AuthPage />} />
+          <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
-              {/* ── Admin Module ─────────────────────────────────────────────── */}
-              <Route element={<AdminRoute />}>
-                <Route path="/admin" element={<AdminLayout />}>
-                  <Route index element={<Navigate to="dashboard" replace />} />
-                  <Route path="dashboard" element={<AdminDashboard />} />
-                  <Route path="students" element={<AdminStudents />} />
-                  <Route path="rooms" element={<AdminRooms />} />
-                  <Route path="fees" element={<AdminFees />} />
-                  <Route path="analytics" element={<AdminAnalytics />} />
-                  <Route path="attendance" element={<AdminAttendance />} />
-                  <Route path="complaints" element={<AdminComplaints />} />
-                  <Route path="announcements" element={<AdminAnnouncements />} />
-                  <Route path="settings" element={<AdminSettings />} />
-                  <Route path="*" element={<Navigate to="dashboard" replace />} />
-                </Route>
-              </Route>
+          {/* Admin */}
+          <Route element={<AdminRoute />}>
+            <Route path="/admin" element={
+              <ErrorBoundary>
+                <AdminLayout />
+              </ErrorBoundary>
+            }>
+              <Route index element={<Navigate to="dashboard" replace />} />
+              <Route path="dashboard"    element={<Suspense fallback={<Fallback />}><AdminDashboard /></Suspense>} />
+              <Route path="students"     element={<Suspense fallback={<Fallback />}><AdminStudents /></Suspense>} />
+              <Route path="rooms"        element={<Suspense fallback={<Fallback />}><AdminRooms /></Suspense>} />
+              <Route path="fees"         element={<Suspense fallback={<Fallback />}><AdminFees /></Suspense>} />
+              <Route path="analytics"    element={<Suspense fallback={<Fallback />}><AdminAnalytics /></Suspense>} />
+              <Route path="attendance"   element={<Suspense fallback={<Fallback />}><AdminAttendance /></Suspense>} />
+              <Route path="complaints"   element={<Suspense fallback={<Fallback />}><AdminComplaints /></Suspense>} />
+              <Route path="announcements" element={<Suspense fallback={<Fallback />}><AdminAnnouncements /></Suspense>} />
+              <Route path="settings"     element={<Suspense fallback={<Fallback />}><AdminSettings /></Suspense>} />
+              <Route path="*"            element={<Navigate to="dashboard" replace />} />
+            </Route>
+          </Route>
 
-              {/* ── Student Module ───────────────────────────────────────────── */}
-              <Route element={<StudentRoute />}>
-                <Route path="/student" element={<StudentLayout />}>
-                  <Route index element={<Navigate to="dashboard" replace />} />
-                  <Route path="dashboard"     element={<StudentDashboard />} />
-                  <Route path="fees"          element={<StudentFees />} />
-                  <Route path="complaints"    element={<StudentComplaints />} />
-                  <Route path="announcements" element={<StudentAnnouncements />} />
-                  <Route path="food"          element={<StudentFoodMenu />} />
-                  <Route path="profile"       element={<StudentProfile />} />
-                  <Route path="*"             element={<Navigate to="dashboard" replace />} />
-                </Route>
-              </Route>
+          {/* Student */}
+          <Route element={<StudentRoute />}>
+            <Route path="/student" element={
+              <ErrorBoundary>
+                <Suspense fallback={<Fallback />}><StudentLayout /></Suspense>
+              </ErrorBoundary>
+            }>
+              <Route index element={<Navigate to="dashboard" replace />} />
+              <Route path="dashboard"     element={<Suspense fallback={<Fallback />}><StudentDashboard /></Suspense>} />
+              <Route path="fees"          element={<Suspense fallback={<Fallback />}><StudentFees /></Suspense>} />
+              <Route path="complaints"    element={<Suspense fallback={<Fallback />}><StudentComplaints /></Suspense>} />
+              <Route path="announcements" element={<Suspense fallback={<Fallback />}><StudentAnnouncements /></Suspense>} />
+              <Route path="food"          element={<Suspense fallback={<Fallback />}><StudentFoodMenu /></Suspense>} />
+              <Route path="profile"       element={<Suspense fallback={<Fallback />}><StudentProfile /></Suspense>} />
+              <Route path="*"             element={<Navigate to="dashboard" replace />} />
+            </Route>
+          </Route>
 
-              {/* ── Super Admin Module ───────────────────────────────────────── */}
-              <Route element={<SuperAdminRoute />}>
-                <Route path="/superadmin" element={<SuperAdminLayout />}>
-                  <Route index element={<Navigate to="dashboard" replace />} />
-                  <Route path="dashboard" element={<SuperAdminDashboard />} />
-                  <Route path="hostels" element={<SuperAdminHostels />} />
-                  <Route path="subscriptions" element={<SuperAdminSubscriptions />} />
-                  <Route path="tickets" element={<SuperAdminTickets />} />
-                  <Route path="settings" element={<SuperAdminSettings />} />
-                  <Route path="*" element={<Navigate to="dashboard" replace />} />
-                </Route>
-              </Route>
+          {/* Super Admin */}
+          <Route element={<SuperAdminRoute />}>
+            <Route path="/superadmin" element={
+              <ErrorBoundary>
+                <Suspense fallback={<Fallback />}><SuperAdminLayout /></Suspense>
+              </ErrorBoundary>
+            }>
+              <Route index element={<Navigate to="dashboard" replace />} />
+              <Route path="dashboard"     element={<Suspense fallback={<Fallback />}><SuperAdminDashboard /></Suspense>} />
+              <Route path="hostels"       element={<Suspense fallback={<Fallback />}><SuperAdminHostels /></Suspense>} />
+              <Route path="subscriptions" element={<Suspense fallback={<Fallback />}><SuperAdminSubscriptions /></Suspense>} />
+              <Route path="tickets"       element={<Suspense fallback={<Fallback />}><SuperAdminTickets /></Suspense>} />
+              <Route path="settings"      element={<Suspense fallback={<Fallback />}><SuperAdminSettings /></Suspense>} />
+              <Route path="*"             element={<Navigate to="dashboard" replace />} />
+            </Route>
+          </Route>
 
-              {/* ── Catch-all → auth ─────────────────────────────────────────── */}
-              <Route path="/" element={<Navigate to="/auth" replace />} />
-              <Route path="*" element={<Navigate to="/auth" replace />} />
-            </Routes>
-          </Suspense>
-        </ErrorBoundary>
+          <Route path="/" element={<Navigate to="/auth" replace />} />
+          <Route path="*" element={<Navigate to="/auth" replace />} />
+        </Routes>
       </AuthProvider>
     </BrowserRouter>
   )

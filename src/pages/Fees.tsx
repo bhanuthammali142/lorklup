@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useEffect, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ReactNode } from 'react'
 import { Plus, Search, Filter, MessageCircle, FileDown, CheckCircle2, Clock, AlertCircle, Loader2, X, RefreshCw } from 'lucide-react'
 import { cn } from '../lib/utils'
@@ -23,8 +24,8 @@ function getDaysLate(dueDateStr: string) {
 export function Fees() {
   const { user } = useAuth()
   const [hostelId, setHostelId] = useState<string | null>(null)
-  const [fees, setFees] = useState<Fee[]>([])
-  const [loading, setLoading] = useState(true)
+  // Remove local fees state, use React Query
+  // Removed duplicate loading state; use React Query loading only
   const [activeTab, setActiveTab] = useState('All')
   const [searchTerm, setSearchTerm] = useState('')
   
@@ -42,17 +43,28 @@ export function Fees() {
     const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + 1, 5).toISOString().split('T')[0]
   })
 
-  const fetchData = async (hId: string) => {
-    setLoading(true)
-    await autoMarkOverdue(hId)
-    const data = await getFees(hId)
-    setFees(data)
-    setLoading(false)
-  }
+
+  // React Query: fetch fees
+  const queryClient = useQueryClient()
+  const {
+    data: feesData = [],
+    isLoading,
+    isFetching,
+    refetch
+  } = useQuery({
+    queryKey: ['fees', hostelId],
+    queryFn: async () => {
+      if (!hostelId) return []
+      await autoMarkOverdue(hostelId)
+      return getFees(hostelId)
+    },
+    enabled: !!hostelId,
+    staleTime: 1000 * 60 * 2,
+  })
 
   useEffect(() => {
     if (!user) return
-    getOrCreateHostel(user.id).then(h => { if (h) { setHostelId(h.id); fetchData(h.id) } })
+    getOrCreateHostel(user.id).then(h => { if (h) setHostelId(h.id) })
   }, [user])
 
   const handleMarkPaid = async () => {
@@ -60,7 +72,6 @@ export function Fees() {
     if (!collectionDate) return toast.error('Collection date is required')
     if (collectionAmount <= 0) return toast.error('Amount must be greater than zero')
     if (collectionAmount > Number(collectingFee.due_amount)) return toast.error("Cannot pay more than the due amount")
-    
     setSavingMsg(true)
     try {
       const res = await processPayment(
@@ -75,7 +86,7 @@ export function Fees() {
       )
       toast.success(res.newStatus === 'paid' ? `Fully Paid! Receipt: ${res.receipt_id}` : `Partial payment recorded!`)
       setCollectingFee(null)
-      fetchData(hostelId)
+      queryClient.invalidateQueries({ queryKey: ['fees', hostelId] })
     } catch { toast.error('Failed to process payment.') }
     finally { setSavingMsg(false) }
   }
@@ -87,7 +98,7 @@ export function Fees() {
       const res = await generateBulkFees(hostelId, genMonthDate, genDueDate);
       if (res.created > 0) {
         toast.success(`Successfully generated ${res.created} new fee records!`);
-        fetchData(hostelId);
+        queryClient.invalidateQueries({ queryKey: ['fees', hostelId] })
       } else {
         toast('All active students already have fees assigned for this month.', { icon: '🙌' });
       }
@@ -120,14 +131,17 @@ export function Fees() {
     doc.save(`receipt-${fee.receipt_id}.pdf`)
   }
 
-  const filtered = fees
+  const filtered = feesData
     .filter(f => activeTab === 'All' || f.status.toLowerCase() === activeTab.toLowerCase())
     .filter(f => !searchTerm || f.students?.full_name.toLowerCase().includes(searchTerm.toLowerCase()))
 
-  const totalCollected = fees.filter(f => f.status === 'paid').reduce((s, f) => s + Number(f.amount), 0)
-  const totalPending = fees.filter(f => f.status === 'pending').reduce((s, f) => s + Number(f.amount), 0)
-  const totalOverdue = fees.filter(f => f.status === 'overdue').reduce((s, f) => s + Number(f.amount), 0)
+  const totalCollected = feesData.filter(f => f.status === 'paid').reduce((s, f) => s + Number(f.amount), 0)
+  const totalPending = feesData.filter(f => f.status === 'pending').reduce((s, f) => s + Number(f.amount), 0)
+  const totalOverdue = feesData.filter(f => f.status === 'overdue').reduce((s, f) => s + Number(f.amount), 0)
   const totalExpected = totalCollected + totalPending + totalOverdue
+
+  // Use React Query loading state
+  const loading = isLoading || isFetching
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -256,12 +270,13 @@ export function Fees() {
               })}
             </div>
             <div className="flex items-center gap-2">
-              <button 
-                onClick={() => toast.success('Sending WhatsApp reminders to ALL OVERDUE students...')} 
-                className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
-                title="Send a mass reminder to unpaid students"
+              <button
+                onClick={() => toast('WhatsApp integration not yet configured. Export the defaulters list and message them manually.', { icon: '📋', duration: 4000 })}
+                className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-500 hover:bg-slate-100 transition-colors"
+                title="WhatsApp integration coming soon"
               >
-                <MessageCircle className="h-4 w-4" />Mass Remind Defaulters
+                <MessageCircle className="h-4 w-4" />
+                Remind Defaulters
               </button>
               <div className="relative w-64 hidden sm:block">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -275,8 +290,68 @@ export function Fees() {
         {loading ? (
           <div className="flex items-center justify-center h-64 gap-3 text-slate-400"><Loader2 className="animate-spin h-5 w-5" /><span>Loading fee ledger...</span></div>
         ) : (
-          <div className="overflow-x-auto min-h-[300px]">
-            <table className="w-full text-left text-sm whitespace-nowrap">
+          <div className="md:overflow-x-auto min-h-[300px]">
+            {/* Mobile Cards View */}
+            <div className="grid grid-cols-1 gap-4 md:hidden p-4 bg-slate-50/30">
+              {filtered.length === 0 ? (
+                <div className="text-center text-slate-500 font-medium py-8">
+                  No matching fee records found.
+                </div>
+              ) : (
+                filtered.map(fee => {
+                  const daysLate = fee.status === 'overdue' ? getDaysLate(fee.due_date) : 0;
+                  return (
+                    <div key={fee.id} className="bg-white border text-sm border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
+                      <div className="flex justify-between items-start">
+                        <div className="flex flex-col">
+                          <span className="font-bold text-slate-900 truncate">{fee.students?.full_name ?? 'Unknown Student'}</span>
+                          <span className="text-xs font-medium text-slate-500">Room: <span className="text-slate-700">{fee.students?.rooms?.room_number ?? 'N/A'}</span></span>
+                        </div>
+                        <span className={cn("inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold border shrink-0",
+                            fee.status === 'paid' ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                            fee.status === 'partial' ? "bg-blue-50 text-blue-700 border-blue-200" :
+                            fee.status === 'pending' ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-rose-50 text-rose-700 border-rose-200")}>
+                            {fee.status.toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-100">
+                        <div className="flex flex-col">
+                          <span className="text-slate-400 font-medium">Billed Amount</span>
+                          <span className="text-slate-900 font-bold">{fmt(Number(fee.amount))}</span>
+                          <span className="text-slate-500 font-medium text-[10px] mt-0.5">{new Date(fee.month).toLocaleString('default', { month: 'short', year: 'numeric' })} Bill</span>
+                        </div>
+                        <div className="flex flex-col text-right">
+                          <span className="text-slate-400 font-medium">Amount Due</span>
+                          <span className={cn("font-bold", fee.due_amount > 0 ? "text-rose-600" : "text-emerald-600")}>{fmt(Number(fee.due_amount))}</span>
+                          <div className="mt-0.5">
+                            {fee.status === 'paid' ? (
+                              <span className="text-emerald-600 font-medium text-[10px]">Collected: {new Date(fee.paid_at!).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</span>
+                            ) : (
+                              <span className={cn("font-medium text-[10px]", fee.status === 'overdue' && "text-rose-600")}>
+                                Due: {new Date(fee.due_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                        {fee.status !== 'paid' ? (
+                          <>
+                            <button onClick={() => toast(`Copy ${fee.students?.full_name}'s number: ${fee.students?.phone ?? 'N/A'} and message manually.`, { duration: 5000 })} className="p-2 text-xs font-semibold text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition text-center flex items-center justify-center"><MessageCircle className="h-4 w-4" /></button>
+                            <button onClick={() => { setCollectionDate(new Date().toISOString().split('T')[0]); setCollectionAmount(Number(fee.due_amount)); setCollectingFee(fee); }} className="flex-1 text-xs font-bold bg-emerald-600 text-white py-2 rounded-lg hover:bg-emerald-700 transition shadow-sm text-center">Collect Payment</button>
+                          </>
+                        ) : (
+                          <button onClick={() => generatePDF(fee)} className="w-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 py-2 rounded-lg hover:bg-blue-100 transition shadow-sm flex items-center justify-center gap-1.5"><FileDown className="h-4 w-4" /> Download Receipt</button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
+            {/* Desktop Table View */}
+            <table className="w-full text-left text-sm whitespace-nowrap hidden md:table">
               <thead className="bg-white border-b border-slate-200 text-slate-500 text-xs uppercase font-bold sticky top-0 z-10 shadow-sm">
                 <tr>
                   <th className="px-6 py-4">Student & Details</th>
@@ -341,8 +416,8 @@ export function Fees() {
                             {fee.status !== 'paid' && (
                               <>
                                 <button onClick={() => { setCollectionDate(new Date().toISOString().split('T')[0]); setCollectionAmount(Number(fee.due_amount)); setCollectingFee(fee); }} className="text-xs font-bold bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition shadow-sm hover:shadow active:scale-95">Collect Payment</button>
-                                <button onClick={() => toast.success(`Sending manual WhatsApp ping to ${fee.students?.full_name}`)} className="text-[11px] font-semibold text-slate-500 hover:text-emerald-600 flex items-center gap-1 hover:bg-emerald-50 px-2 py-1 rounded transition w-max">
-                                  <MessageCircle className="h-3 w-3" /> Ping Student
+                                <button onClick={() => toast(`Copy ${fee.students?.full_name}'s number: ${fee.students?.phone ?? 'N/A'} and message manually.`, { duration: 5000 })} className="text-[11px] font-semibold text-slate-500 hover:text-slate-700 flex items-center gap-1 hover:bg-slate-50 px-2 py-1 rounded transition w-max">
+                                  <MessageCircle className="h-3 w-3" /> Copy Number
                                 </button>
                               </>
                             )}
