@@ -6,6 +6,7 @@ import { useAuth } from '../../lib/AuthContext'
 import { supabase } from '../../lib/supabase'
 import type { Fee } from '../../types'
 import { cn } from '../../lib/utils'
+import toast from 'react-hot-toast'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
@@ -36,17 +37,27 @@ export function StudentFees() {
   // Razorpay integration
   const handlePayNow = async () => {
     if (!studentData || totalDue <= 0) return
+
+    const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID
+    if (!razorpayKey) {
+      toast('Online payment is not configured yet. Please pay at the hostel office.', {
+        icon: '⚠️',
+        duration: 5000,
+      })
+      return
+    }
+
     await loadRazorpayScript()
     const options = {
-      key: 'RAZORPAY_KEY_ID', // TODO: Replace with your Razorpay key
+      key: razorpayKey,
       amount: totalDue * 100, // in paise
       currency: 'INR',
       name: 'HostelOS',
       description: 'Hostel Fee Payment',
       image: '/logo.png',
       handler: function (response: any) {
+        toast.success('Payment successful! ID: ' + response.razorpay_payment_id)
         // TODO: Call backend to verify payment and update fee status
-        alert('Payment successful! Payment ID: ' + response.razorpay_payment_id)
       },
       prefill: {
         name: studentData.full_name,
@@ -54,11 +65,7 @@ export function StudentFees() {
         contact: studentData.phone,
       },
       theme: { color: '#10b981' },
-      modal: {
-        ondismiss: function () {
-          // Optionally handle modal close
-        }
-      }
+      modal: { ondismiss: function () {} },
     }
     openRazorpayCheckout(options)
   }

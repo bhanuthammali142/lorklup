@@ -38,13 +38,31 @@ export function Attendance() {
 
   const handleMark = async (studentId: string, status: 'present' | 'absent' | 'leave') => {
     if (!hostelId) return
+    const queryKey = ['attendance', hostelId, selectedDate]
+
+    // Snapshot previous data
+    const previousData = queryClient.getQueryData(queryKey)
+
+    // Optimistically update cache
+    queryClient.setQueryData(queryKey, (old: any) => {
+      if (!old) return old
+      return old.map((student: any) => {
+        if (student.id === studentId) {
+          return { ...student, attendance: [{ status }] }
+        }
+        return student
+      })
+    })
+
     try {
-      // Optimistic update (optional, can be improved)
       await markAttendance(hostelId, studentId, selectedDate, status)
-      queryClient.invalidateQueries({ queryKey: ['attendance', hostelId, selectedDate] })
     } catch {
       toast.error('Failed to mark attendance')
-      queryClient.invalidateQueries({ queryKey: ['attendance', hostelId, selectedDate] })
+      // Revert to snapshot on failure
+      queryClient.setQueryData(queryKey, previousData)
+    } finally {
+      // Sync with server in background
+      queryClient.invalidateQueries({ queryKey })
     }
   }
 

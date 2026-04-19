@@ -1,7 +1,8 @@
 // src/pages/FoodMenuEditor.tsx
 // Admin-facing food menu editor. Writes to food_menus table.
 import { useEffect, useState } from 'react'
-import { UtensilsCrossed, Save, Loader2 } from 'lucide-react'
+import { UtensilsCrossed, Save, Loader2, ChevronDown } from 'lucide-react'
+import { cn } from '../lib/utils'
 import { useAuth } from '../lib/AuthContext'
 import { getOrCreateHostel, getFoodMenu, saveFoodMenu } from '../lib/api'
 import toast from 'react-hot-toast'
@@ -19,6 +20,7 @@ export function FoodMenuEditor() {
   const [menu, setMenu] = useState<Record<string, Record<string, string>>>(BLANK_MENU)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [expandedDay, setExpandedDay] = useState<string>(DAYS[0])
 
   useEffect(() => {
     if (!user) return
@@ -79,26 +81,32 @@ export function FoodMenuEditor() {
 
       <div className="space-y-4">
         {DAYS.map(day => (
-          <div key={day} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-            <div className="bg-slate-50 px-5 py-3 border-b border-slate-100">
-              <p className="font-bold text-slate-900">{day}</p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4">
-              {MEALS.map(meal => (
-                <div key={meal}>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
-                    {meal}
-                  </label>
-                  <textarea
-                    value={menu[day]?.[meal] || ''}
-                    onChange={e => setMeal(day, meal, e.target.value)}
-                    rows={2}
-                    placeholder={`e.g. Idli, Sambar, Chutney`}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none resize-none transition"
-                  />
-                </div>
-              ))}
-            </div>
+          <div key={day} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm transition-all duration-200">
+            <button 
+              onClick={() => setExpandedDay(expandedDay === day ? '' : day)}
+              className="w-full text-left bg-slate-50 px-5 py-4 flex justify-between items-center hover:bg-slate-100 transition-colors"
+            >
+              <span className="font-bold text-slate-900">{day}</span>
+              <ChevronDown className={cn("h-5 w-5 text-slate-400 transition-transform", expandedDay === day && "rotate-180")} />
+            </button>
+            {expandedDay === day && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 border-t border-slate-100 animate-in slide-in-from-top-2 duration-200">
+                {MEALS.map(meal => (
+                  <div key={meal}>
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                      {meal}
+                    </label>
+                    <textarea
+                      value={menu[day]?.[meal] || ''}
+                      onChange={e => setMeal(day, meal, e.target.value)}
+                      rows={2}
+                      placeholder={`e.g. Idli, Sambar, Chutney`}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none resize-none transition"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </div>

@@ -240,15 +240,18 @@ export function Fees() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Total Expected (All Time)', value: fmt(totalExpected), color: '' },
-          { label: 'Collected (All Time)', value: fmt(fees.reduce((s,f) => s + Number(f.paid_amount || 0), 0)), color: 'text-emerald-600' },
-          { label: 'Currently Pending', value: fmt(totalExpected - fees.reduce((s,f) => s + Number(f.paid_amount || 0), 0)), color: 'text-amber-600' },
-          { label: 'Currently Overdue', value: fmt(totalOverdue), color: 'text-rose-600' },
+          { label: 'Total Expected',  mobileLabel: 'Expected', value: fmt(totalExpected),                                                                                  color: '' },
+          { label: 'Collected',       mobileLabel: 'Collected', value: fmt(feesData.reduce((s, f) => s + Number(f.paid_amount || 0), 0)),                                  color: 'text-emerald-600' },
+          { label: 'Pending',         mobileLabel: 'Pending',   value: fmt(totalExpected - feesData.reduce((s, f) => s + Number(f.paid_amount || 0), 0)),                  color: 'text-amber-600' },
+          { label: 'Overdue',         mobileLabel: 'Overdue',   value: fmt(totalOverdue),                                                                                  color: 'text-rose-600' },
         ].map((s, i) => (
           <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm relative overflow-hidden">
             <div className={cn("absolute right-0 top-0 w-2 h-full", s.color ? `bg-${s.color.split('-')[1]}-500/10` : "bg-slate-100")}></div>
-            <p className="text-sm font-medium text-slate-500">{s.label}</p>
-            <h3 className={cn("text-xl font-bold tracking-tight mt-1", s.color || "text-slate-900")}>{s.value}</h3>
+            <p className="text-xs sm:text-sm font-medium text-slate-500">
+              <span className="sm:hidden">{s.mobileLabel}</span>
+              <span className="hidden sm:inline">{s.label}</span>
+            </p>
+            <h3 className={cn("text-lg sm:text-xl font-bold tracking-tight mt-1 truncate", s.color || "text-slate-900")}>{s.value}</h3>
           </div>
         ))}
       </div>

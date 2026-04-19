@@ -175,7 +175,7 @@ serve(async (req) => {
               floor: floor.floorName,
               type: room.type,
               capacity: room.beds,
-              monthly_fee: room.monthly_fee || 0
+              monthly_fee: room.monthlyFee ?? room.monthly_fee ?? 0,
             }).select().single()
             if (roomErr) continue
             roomsCreated++

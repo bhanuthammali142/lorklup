@@ -126,13 +126,14 @@ export function SuperAdminHostels() {
                 <th className="px-6 py-4">Contact</th>
                 <th className="px-6 py-4">Status</th>
                 <th className="px-6 py-4">Created</th>
+                <th className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 [1, 2, 3].map(i => (
                   <tr key={i}>
-                    {[1, 2, 3, 4, 5].map(j => (
+                    {[1, 2, 3, 4, 5, 6].map(j => (
                       <td key={j} className="px-6 py-4">
                         <div className="h-4 bg-slate-100 rounded-full animate-pulse" />
                       </td>
@@ -141,7 +142,7 @@ export function SuperAdminHostels() {
                 ))
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-16 text-center">
+                  <td colSpan={6} className="p-16 text-center">
                     <Building2 className="h-12 w-12 mx-auto mb-3 text-slate-200" />
                     <p className="font-bold text-slate-400">
                       {search ? 'No hostels match your search.' : 'No hostels yet. Click "Add new hostel" to get started!'}
@@ -187,9 +188,6 @@ export function SuperAdminHostels() {
           </table>
         </div>
       </div>
-
-      {/* Desktop table: add Actions column header */}
-      {/* Note: already updated rows above. Add header column: */}
 
       {showAddModal && (
         <AddHostelModal

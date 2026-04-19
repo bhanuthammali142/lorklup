@@ -206,7 +206,7 @@ export function AddHostelModal({
         </button>
       </div>
 
-      <div className="flex border-b border-slate-100 px-6 pt-4 gap-1 shrink-0 overflow-x-auto">
+      <div className="flex border-b border-slate-100 px-4 sm:px-6 pt-4 gap-1 sm:gap-2 shrink-0 overflow-x-auto no-scrollbar">
         {STEPS.map(s => {
           const Icon = s.icon
           const active = step === s.id
@@ -215,11 +215,13 @@ export function AddHostelModal({
             <button
               key={s.id}
               onClick={() => isDone && setStep(s.id)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-t-xl text-xs font-bold transition whitespace-nowrap border-b-2 -mb-px ${active ? 'border-indigo-600 text-indigo-600' : isDone ? 'border-emerald-400 text-emerald-600 cursor-pointer' : 'border-transparent text-slate-400'}`}
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold transition whitespace-nowrap border-b-2 -mb-px ${active ? 'border-indigo-600 text-indigo-600' : isDone ? 'border-emerald-400 text-emerald-600 cursor-pointer hover:bg-emerald-50 rounded-t-lg' : 'border-transparent text-slate-400'}`}
             >
-              <Icon className="h-3.5 w-3.5" />
-              {s.label}
-              {isDone && <CheckCircle2 className="h-3 w-3 text-emerald-500" />}
+              <Icon className="h-4 w-4 sm:h-3.5 sm:w-3.5 shrink-0" />
+              <span className={active || isDone ? "block" : "hidden sm:block"}>
+                {s.label}
+              </span>
+              {isDone && <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0 hidden sm:block" />}
             </button>
           )
         })}

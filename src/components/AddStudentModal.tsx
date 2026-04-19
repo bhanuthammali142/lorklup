@@ -30,7 +30,7 @@ interface RoomOption {
   beds: { id: string; bed_number: string; status: string }[]
 }
 
-type OTPState = 'idle' | 'sending' | 'sent' | 'verifying' | 'verified'
+type OTPState = 'idle' | 'sending' | 'sent' | 'verifying' | 'verified' | 'bypassed'
 
 function PhotoUploadField({
   label,
@@ -152,11 +152,11 @@ export function AddStudentModal({ isOpen, hostelId, onClose, onSuccess }: AddStu
       // Supabase Phone Auth may not be enabled — fall back gracefully
       if (error.message.includes('not enabled') || error.message.includes('provider')) {
         toast(
-          'SMS verification is not enabled in your Supabase project. Enable Phone provider in Auth settings, or skip verification for testing.',
-          { icon: '⚠️', duration: 6000 }
+          'SMS verification not configured. Bypassing verification to allow testing.',
+          { icon: '⚠️', duration: 4000 }
         )
-        // Allow bypass in dev — mark as verified with a warning
-        setState('verified')
+        // Set bypassed state instead of verified
+        setState('bypassed')
       } else {
         toast.error(`OTP error: ${error.message}`)
       }
@@ -198,7 +198,7 @@ export function AddStudentModal({ isOpen, hostelId, onClose, onSuccess }: AddStu
   const handleSave = async () => {
     if (!hostelId) return
     if (!form.full_name || !form.phone) return toast.error('Name and phone are required.')
-    if (phoneOTPState !== 'verified') return toast.error('Please verify the student phone number first.')
+    if (phoneOTPState !== 'verified' && phoneOTPState !== 'bypassed') return toast.error('Please verify the student phone number first.')
 
     setSaving(true)
     try {
@@ -303,6 +303,11 @@ export function AddStudentModal({ isOpen, hostelId, onClose, onSuccess }: AddStu
               <CheckCircle2 className="h-3.5 w-3.5" />Verified
             </span>
           )}
+          {state === 'bypassed' && (
+            <span className="text-xs text-amber-600 font-semibold flex items-center gap-1">
+              <AlertTriangle className="h-3.5 w-3.5" />Unverified
+            </span>
+          )}
         </div>
         {state === 'idle' && (
           <button
@@ -341,18 +346,24 @@ export function AddStudentModal({ isOpen, hostelId, onClose, onSuccess }: AddStu
             Phone number confirmed
           </div>
         )}
+        {state === 'bypassed' && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800 font-medium flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+            <span>Verification skipped. Student will be marked as unverified in the system.</span>
+          </div>
+        )}
       </div>
     )
   }
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200"
       role="dialog"
       aria-modal="true"
       aria-label="Add New Student"
     >
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-xl w-full max-w-xl max-h-[95vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
         {/* Header */}
         <div className="border-b border-slate-100 p-5 flex justify-between items-center bg-slate-50">
           <div>
@@ -386,7 +397,7 @@ export function AddStudentModal({ isOpen, hostelId, onClose, onSuccess }: AddStu
               <div key={s.num} className="flex items-center">
                 <div className={cn('flex items-center gap-2', step >= s.num ? 'text-blue-600 font-semibold' : 'text-slate-400')}>
                   <div className={cn(
-                    'h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold border',
+                    'h-6 w-6 shrink-0 rounded-full flex items-center justify-center text-xs font-bold border',
                     step > s.num ? 'bg-blue-600 text-white border-blue-600' :
                     step === s.num ? 'border-blue-600 bg-blue-50 text-blue-600' :
                     'border-slate-200 bg-slate-50 text-slate-400'
@@ -402,11 +413,11 @@ export function AddStudentModal({ isOpen, hostelId, onClose, onSuccess }: AddStu
         )}
 
         {/* Content */}
-        <div className="p-6 h-[400px] overflow-y-auto">
+        <div className="p-4 sm:p-6 flex-1 overflow-y-auto">
           {/* STEP 1 */}
           {step === 1 && (
             <div className="space-y-4 animate-in slide-in-from-right-4 duration-300">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-sm font-medium text-slate-700">Full Name *</label>
                   <input value={form.full_name} onChange={e => set('full_name', e.target.value)}
@@ -420,7 +431,7 @@ export function AddStudentModal({ isOpen, hostelId, onClose, onSuccess }: AddStu
                     placeholder="0000 0000 0000" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-sm font-medium text-slate-700">Student Phone *</label>
                   <input value={form.phone} onChange={e => set('phone', e.target.value)}
@@ -440,7 +451,7 @@ export function AddStudentModal({ isOpen, hostelId, onClose, onSuccess }: AddStu
                   className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-blue-50/30"
                   placeholder="student@example.com (optional — phone used if blank)" />
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="text-sm font-medium text-slate-700">ID / Roll No.</label>
                   <input value={form.id_number} onChange={e => set('id_number', e.target.value)}
@@ -466,7 +477,7 @@ export function AddStudentModal({ isOpen, hostelId, onClose, onSuccess }: AddStu
                   className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" />
               </div>
               <div className="h-px bg-slate-100" />
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <PhotoUploadField label="Aadhaar Card Photo" value={aadhaarFile} onChange={setAadhaarFile} />
                 <PhotoUploadField label="Student ID Card Photo" value={idCardFile} onChange={setIdCardFile} />
               </div>
@@ -520,7 +531,7 @@ export function AddStudentModal({ isOpen, hostelId, onClose, onSuccess }: AddStu
                   </p>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-slate-700">Select Room</label>
                   <select
@@ -630,7 +641,7 @@ export function AddStudentModal({ isOpen, hostelId, onClose, onSuccess }: AddStu
           {step < 3 && (
             <button
               onClick={() => {
-                if (step === 2 && phoneOTPState !== 'verified')
+                if (step === 2 && phoneOTPState !== 'verified' && phoneOTPState !== 'bypassed')
                   return toast.error('Please verify student phone first.')
                 setStep(step + 1)
               }}

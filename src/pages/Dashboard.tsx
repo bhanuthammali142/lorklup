@@ -4,6 +4,7 @@ import { Users, Bed, CreditCard, TrendingUp, Sparkles, AlertCircle, RefreshCw } 
 import toast from 'react-hot-toast'
 import { useAuth } from '../lib/AuthContext'
 import { getOrCreateHostel, getDashboardStats, getRevenueByMonth, getRoomsWithBeds } from '../lib/api'
+import { useDocumentTitle } from '../lib/useDocumentTitle'
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis } from 'recharts'
 
 function fmt(n: number) {
@@ -13,6 +14,8 @@ function fmt(n: number) {
 }
 
 export function Dashboard() {
+  useDocumentTitle('Dashboard')
+  
   const { user } = useAuth()
   const [hostelId, setHostelId] = useState<string | null>(null)
   const [stats, setStats] = useState({ totalStudents: 0, totalBeds: 0, occupiedBeds: 0, monthlyRevenue: 0, pendingFees: 0, overdueFees: 0 })
@@ -46,30 +49,31 @@ export function Dashboard() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Dashboard</h1>
           <p className="text-slate-500 mt-1">Welcome back, here's what's happening today.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <button
             onClick={() => hostelId && Promise.all([getDashboardStats(hostelId), getRevenueByMonth(hostelId), getRoomsWithBeds(hostelId)]).then(([s, rev, rData]) => { setStats(s); setRevenueData(rev); setRooms(rData) })}
-            className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
+            className="flex items-center gap-1.5 sm:gap-2 rounded-full border border-slate-200 bg-white px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
           >
-            <RefreshCw className="h-4 w-4 text-slate-400" />
-            Refresh
+            <RefreshCw className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400" />
+            <span className="hidden sm:inline">Refresh</span>
           </button>
-          <button onClick={() => toast('No new alerts.', { icon: '🔔' })} className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-colors">
-            <AlertCircle className="h-4 w-4 text-orange-500" />
-            {stats.overdueFees > 0 ? 'Overdue Fees!' : 'No Alerts'}
+          <button onClick={() => toast('No new alerts.', { icon: '🔔' })} className="flex items-center gap-1.5 sm:gap-2 rounded-full border border-slate-200 bg-white px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-colors">
+            <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-orange-500" />
+            {stats.overdueFees > 0 ? 'Overdue Fees!' : <span className="hidden sm:inline">No Alerts</span>}
           </button>
           <button
             onClick={() => toast('AI insights require a Gemini API key. Add VITE_GEMINI_KEY to .env.local to enable.', { icon: '🤖', duration: 5000 })}
-            className="flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:shadow hover:bg-blue-700 transition-all opacity-70 cursor-not-allowed"
+            className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-blue-600 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-white shadow-sm hover:shadow hover:bg-blue-700 transition-all opacity-70 cursor-not-allowed"
             title="Configure Gemini API key to enable"
           >
-            <Sparkles className="h-4 w-4" />
-            AI Insights (Configure)
+            <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">AI Insights (Configure)</span>
+            <span className="sm:hidden">AI</span>
           </button>
         </div>
       </div>
@@ -78,20 +82,20 @@ export function Dashboard() {
         {cards.map((stat) => {
           const Icon = stat.icon
           return (
-            <div key={stat.name} className="card-premium p-6 relative overflow-hidden group">
+            <div key={stat.name} className="card-premium p-4 sm:p-6 relative overflow-hidden group">
               <div className="absolute top-0 right-0 p-4 opacity-5 transform translate-x-4 -translate-y-4 group-hover:scale-110 transition-transform duration-500">
-                <Icon className="w-24 h-24" />
+                <Icon className="w-16 h-16 sm:w-24 sm:h-24" />
               </div>
-              <div className="flex items-center gap-4 relative z-10">
-                <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${stat.color}`}>
-                  <Icon className="h-6 w-6" />
+              <div className="flex items-center gap-3 sm:gap-4 relative z-10">
+                <div className={`flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl ${stat.color}`}>
+                  <Icon className="h-5 w-5 sm:h-6 sm:w-6" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-slate-500">{stat.name}</p>
-                  <h3 className={`text-2xl font-bold tracking-tight mt-1 ${loading ? 'animate-pulse text-slate-300' : 'text-slate-900'}`}>{stat.value}</h3>
+                  <p className="text-xs sm:text-sm font-medium text-slate-500">{stat.name}</p>
+                  <h3 className={`text-lg sm:text-2xl font-bold tracking-tight mt-0.5 sm:mt-1 ${loading ? 'animate-pulse text-slate-300' : 'text-slate-900'}`}>{stat.value}</h3>
                 </div>
               </div>
-              <div className="mt-4 flex items-center gap-2 text-sm relative z-10">
+              <div className="mt-3 sm:mt-4 flex items-center gap-2 text-xs sm:text-sm relative z-10">
                 <span className={stat.positive ? "text-emerald-600 font-medium" : "text-rose-600 font-medium"}>
                   {stat.change}
                 </span>
