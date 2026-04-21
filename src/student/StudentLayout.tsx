@@ -233,11 +233,17 @@ export function StudentLayout() {
         <div
           className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 md:hidden"
           onClick={() => setMobileMenuOpen(false)}
+          aria-hidden="true"
         />
       )}
 
       {/* Mobile Sidebar Drawer */}
-      <div className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 md:hidden w-64 bg-white ${mobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'}`}>
+      <div 
+        className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 md:hidden w-64 bg-white ${mobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'}`}
+        role="navigation"
+        aria-label="Mobile navigation menu"
+        aria-hidden={!mobileMenuOpen}
+      >
         <SidebarContent isMobile onClose={() => setMobileMenuOpen(false)} />
       </div>
 
@@ -248,6 +254,7 @@ export function StudentLayout() {
             <button
               onClick={() => setMobileMenuOpen(true)}
               className="md:hidden p-2 -ml-2 rounded-lg text-slate-500 hover:bg-slate-100 min-h-[44px] min-w-[44px] flex items-center justify-center"
+              aria-label="Open navigation menu"
             >
               <Menu className="h-5 w-5" />
             </button>
@@ -267,13 +274,13 @@ export function StudentLayout() {
 
         {/* Main Content Area — pb-20 leaves room for mobile bottom tab bar */}
         <main className="flex-1 overflow-y-auto">
-          <div className="max-w-[1440px] px-4 sm:px-6 md:px-8 py-6 sm:py-8 pb-24 md:pb-8 mx-auto w-full">
+          <div className="max-w-[1440px] px-4 sm:px-6 md:px-8 py-6 sm:py-8 pb-20 md:pb-8 mx-auto w-full">
             <Outlet />
           </div>
         </main>
 
         {/* Mobile Bottom Tab Bar */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-30 flex items-stretch safe-area-inset-bottom">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-30 flex items-stretch safe-area-inset-bottom" aria-label="Mobile primary navigation">
           {BOTTOM_NAV.map(item => (
             <NavLink
               key={item.name}

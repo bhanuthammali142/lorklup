@@ -43,11 +43,17 @@ export function AdminLayout() {
         <div 
           className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 md:hidden" 
           onClick={() => setMobileMenuOpen(false)}
+          aria-hidden="true"
         />
       )}
 
       {/* Mobile Sidebar Drawer */}
-      <div className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 md:hidden w-64 bg-white ${mobileMenuOpen ? 'translate-x-0 cursor-default' : '-translate-x-full'}`}>
+      <div 
+        className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 md:hidden w-64 bg-white ${mobileMenuOpen ? 'translate-x-0 cursor-default' : '-translate-x-full'}`}
+        role="navigation"
+        aria-label="Mobile navigation menu"
+        aria-hidden={!mobileMenuOpen}
+      >
         <AdminSidebar isMobile onClose={() => setMobileMenuOpen(false)} />
       </div>
 
@@ -60,6 +66,7 @@ export function AdminLayout() {
           <button 
             onClick={() => setMobileMenuOpen(true)}
             className="p-2 -mr-2 rounded-lg text-slate-500 hover:bg-slate-100"
+            aria-label="Open navigation menu"
           >
             <Menu className="h-5 w-5" />
           </button>
