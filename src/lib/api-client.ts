@@ -73,6 +73,11 @@ export const apiAuth = {
       body: JSON.stringify({ name, email, password }),
     }),
   me: () => request<ApiUser>('/auth/me'),
+  changePassword: (newPassword: string) =>
+    request('/auth/me', {
+      method: 'PUT',
+      body: JSON.stringify({ newPassword }),
+    }),
 }
 
 /** Hostels */

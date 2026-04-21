@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useEffect, useState } from 'react'
 import { Building2, Plus, Search, ShieldCheck, RefreshCw, Eye, X, MapPin, Phone, Mail, Calendar, Hash } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
+
 import { AddHostelModal } from '../components/AddHostelModal'
 
 export function SuperAdminHostels() {

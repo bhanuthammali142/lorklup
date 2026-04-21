@@ -18,7 +18,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import { useAuth } from '../lib/AuthContext'
-import { supabase } from '../lib/supabase'
+
 import { cn } from '../lib/utils'
 import toast from 'react-hot-toast'
 
@@ -53,8 +53,9 @@ function ChangePasswordPrompt({ onDone }: { onDone: () => void }) {
     if (password !== confirm)    return toast.error('Passwords do not match')
     setSaving(true)
     try {
-      const { error } = await supabase.auth.updateUser({ password })
-      if (error) throw error
+      // Password update via API
+      const { apiAuth } = await import('../lib/api-client')
+      await apiAuth.changePassword(password)
       toast.success('Password updated! Welcome to HostelOS.')
       onDone()
     } catch (err: any) {

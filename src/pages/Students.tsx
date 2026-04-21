@@ -5,7 +5,6 @@ import { Plus, Search, Filter, MoreVertical, FileText, Trash2, Loader2, Eye, X, 
 import { AddStudentModal } from '../components/AddStudentModal'
 import { useAuth } from '../lib/AuthContext'
 import { getOrCreateHostel, getStudents, deleteStudent, exportStudentsCSV } from '../lib/api'
-import { supabase } from '../lib/supabase'
 import type { Student } from '../types'
 import toast from 'react-hot-toast'
 
@@ -43,19 +42,7 @@ export function Students() {
 
   const handleDelete = async (id: string, name: string) => {
     try {
-      const { data: pendingFees } = await supabase
-        .from('fees')
-        .select('*')
-        .eq('student_id', id)
-        .neq('status', 'paid')
-
-      const hasPendingFees = pendingFees && pendingFees.length > 0
-      
       let msg = `Delete student "${name}"? This will also free their bed.`
-      if (hasPendingFees) {
-        msg = `⚠️ WARNING: ${name} has UNPAID FEES!\n\nAre you sure you want to delete this student and free their bed? This action cannot be undone.`
-      }
-
       if (!window.confirm(msg)) return
 
       await deleteStudent(id)

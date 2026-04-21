@@ -12,7 +12,7 @@ import {
   Wrench, CheckCircle2, ImagePlus, X, AlertTriangle, Upload,
 } from 'lucide-react'
 import { useAuth } from '../../lib/AuthContext'
-import { supabase } from '../../lib/supabase'
+
 import toast from 'react-hot-toast'
 
 const STATUS_STYLES = {

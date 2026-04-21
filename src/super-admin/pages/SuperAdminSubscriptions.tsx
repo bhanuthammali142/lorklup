@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useEffect, useState } from 'react'
 import { CreditCard, CheckCircle2, Clock, Building2, TrendingUp } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
+
 import toast from 'react-hot-toast'
 
 const PLANS = [

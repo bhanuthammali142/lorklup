@@ -113,7 +113,7 @@ export function Announcements() {
               </div>
             ) : (
               <div className="space-y-4">
-                {announcementsData.map(a => (
+                {announcementsData.map((a: any) => (
                   <div key={a.id} className="relative group bg-slate-50 rounded-xl p-4 border border-slate-100 hover:border-slate-300 transition-colors">
                     <button onClick={() => handleDelete(a.id)} className="absolute top-4 right-4 text-slate-400 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Trash2 className="h-4 w-4" />

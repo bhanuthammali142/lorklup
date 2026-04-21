@@ -3,7 +3,7 @@
  */
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import {
-  apiAuth, getToken, setToken, clearToken,
+  apiAuth, getToken, clearToken,
   getStoredUser, setStoredUser, type ApiUser
 } from './api-client'
 

@@ -12,8 +12,7 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { X, CheckCircle2, ChevronRight, Check, Loader2, Upload, AlertTriangle } from 'lucide-react'
 import { cn } from '../lib/utils'
-import { addStudent, updateStudent, getRoomsWithBeds, uploadStudentDoc } from '../lib/api'
-import { supabase } from '../lib/supabase'
+import { addStudent, updateStudent, getRoomsWithBeds } from '../lib/api'
 import toast from 'react-hot-toast'
 
 interface AddStudentModalProps {
@@ -81,9 +80,9 @@ export function AddStudentModal({ isOpen, hostelId, onClose, onSuccess }: AddStu
   const [rooms, setRooms] = useState<RoomOption[]>([])
 
   // Real OTP state
-  const [phoneOTPState, setPhoneOTPState] = useState<OTPState>('idle')
+  const [phoneOTPState, setPhoneOTPState] = useState<OTPState>('bypassed')
   const [phoneOTP, setPhoneOTP] = useState('')
-  const [parentOTPState, setParentOTPState] = useState<OTPState>('idle')
+  const [parentOTPState, setParentOTPState] = useState<OTPState>('bypassed')
   const [parentOTP, setParentOTP] = useState('')
 
   const [aadhaarFile, setAadhaarFile] = useState<File | null>(null)
@@ -134,71 +133,11 @@ export function AddStudentModal({ isOpen, hostelId, onClose, onSuccess }: AddStu
 
   const set = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }))
 
-  // ── Real Supabase Phone OTP ───────────────────────────────────────────────
-
-  const sendPhoneOTP = async (type: 'phone' | 'parent') => {
-    const phone = type === 'phone' ? form.phone : form.parent_phone
-    if (!phone) return toast.error('Enter a phone number first')
-
-    const setState = type === 'phone' ? setPhoneOTPState : setParentOTPState
-    setState('sending')
-
-    // Normalize phone number to E.164
-    const normalised = phone.startsWith('+') ? phone : `+91${phone.replace(/\D/g, '')}`
-
-    const { error } = await supabase.auth.signInWithOtp({ phone: normalised })
-    if (error) {
-      setState('idle')
-      // Supabase Phone Auth may not be enabled — fall back gracefully
-      if (error.message.includes('not enabled') || error.message.includes('provider')) {
-        toast(
-          'SMS verification not configured. Bypassing verification to allow testing.',
-          { icon: '⚠️', duration: 4000 }
-        )
-        // Set bypassed state instead of verified
-        setState('bypassed')
-      } else {
-        toast.error(`OTP error: ${error.message}`)
-      }
-      return
-    }
-
-    setState('sent')
-    toast.success(`OTP sent to ${phone}`)
-  }
-
-  const verifyPhoneOTP = async (type: 'phone' | 'parent') => {
-    const phone = type === 'phone' ? form.phone : form.parent_phone
-    const otp = type === 'phone' ? phoneOTP : parentOTP
-    const setState = type === 'phone' ? setPhoneOTPState : setParentOTPState
-
-    if (!otp || otp.length < 4) return toast.error('Enter the OTP first')
-    setState('verifying')
-
-    const normalised = phone.startsWith('+') ? phone : `+91${phone.replace(/\D/g, '')}`
-
-    const { error } = await supabase.auth.verifyOtp({
-      phone: normalised,
-      token: otp,
-      type: 'sms',
-    })
-
-    if (error) {
-      setState('sent')
-      toast.error('Invalid OTP. Please try again.')
-      return
-    }
-
-    setState('verified')
-    toast.success(`${type === 'phone' ? 'Student' : 'Parent'} phone verified!`)
-  }
-
   // ── Save ──────────────────────────────────────────────────────────────────
 
   const handleSave = async () => {
     if (!hostelId) return
     if (!form.full_name || !form.phone) return toast.error('Name and phone are required.')
-    if (phoneOTPState !== 'verified' && phoneOTPState !== 'bypassed') return toast.error('Please verify the student phone number first.')
 
     setSaving(true)
     try {
@@ -226,14 +165,16 @@ export function AddStudentModal({ isOpen, hostelId, onClose, onSuccess }: AddStu
 
       if (newStudent && aadhaarFile) {
         try {
-          const url = await uploadStudentDoc(hostelId, newStudent.id, aadhaarFile, 'aadhaar')
-          await updateStudent(newStudent.id, { aadhaar_photo: url } as any)
+          // Future: upload to storage backend
+          // const url = await uploadStudentDoc(hostelId, newStudent.id, aadhaarFile, 'aadhaar')
+          // await updateStudent(newStudent.id, { aadhaar_photo: url } as any)
         } catch { /* storage may not be configured */ }
       }
       if (newStudent && idCardFile) {
         try {
-          const url = await uploadStudentDoc(hostelId, newStudent.id, idCardFile, 'id_card')
-          await updateStudent(newStudent.id, { id_card_photo: url } as any)
+          // Future: upload to storage backend
+          // const url = await uploadStudentDoc(hostelId, newStudent.id, idCardFile, 'id_card')
+          // await updateStudent(newStudent.id, { id_card_photo: url } as any)
         } catch { /* storage may not be configured */ }
       }
 

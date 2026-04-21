@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useEffect, useState } from 'react'
 import { Ticket, CheckCircle2, Clock, Loader2, RefreshCw, Building2 } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
+
 import toast from 'react-hot-toast'
 
 const STATUS_COLORS = {

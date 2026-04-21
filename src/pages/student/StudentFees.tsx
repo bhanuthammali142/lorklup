@@ -3,12 +3,12 @@ import React, { useEffect, useState } from 'react'
 import { Wallet, Clock, CheckCircle2, AlertCircle, FileDown } from 'lucide-react'
 import { loadRazorpayScript, openRazorpayCheckout } from '../../lib/razorpay'
 import { useAuth } from '../../lib/AuthContext'
-import { supabase } from '../../lib/supabase'
+
 import type { Fee } from '../../types'
 import { cn } from '../../lib/utils'
 import toast from 'react-hot-toast'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
+
+
 
 function fmt(n: number) {
   return `₹${n.toLocaleString('en-IN')}`
@@ -70,50 +70,13 @@ export function StudentFees() {
     openRazorpayCheckout(options)
   }
 
-  const generatePDF = (fee: Fee) => {
-    const doc = new jsPDF()
-    doc.setFontSize(18)
-    doc.text('Fee Receipt', 14, 22)
-    doc.setFontSize(11)
-    doc.text(`Receipt ID: ${fee.receipt_id ?? 'N/A'}`, 14, 35)
-    doc.text(`Collection Date: ${fee.paid_at ? new Date(fee.paid_at).toLocaleDateString('en-IN') : ''}`, 14, 43)
-    autoTable(doc, {
-      startY: 55,
-      head: [['Field', 'Details']],
-      body: [
-        ['Student Name', studentData?.full_name ?? ''],
-        ['Month', new Date(fee.month).toLocaleString('default', { month: 'long', year: 'numeric' })],
-        ['Total Amount', fmt(Number(fee.amount))],
-        ['Amount Paid', fmt(Number(fee.paid_amount))],
-        ['Status', fee.status.toUpperCase()],
-      ],
-    })
-    doc.save(`receipt-${fee.receipt_id || new Date(fee.month).getTime()}.pdf`)
+  const generatePDF = () => {
+    toast.info('PDF download feature coming soon')
   }
 
   // Lease/admission agreement PDF
   const generateAgreementPDF = () => {
-    if (!studentData) return
-    const doc = new jsPDF()
-    doc.setFontSize(16)
-    doc.text('Hostel Admission Agreement', 14, 22)
-    doc.setFontSize(11)
-    doc.text(`Student Name: ${studentData.full_name}`, 14, 35)
-    doc.text(`Room: ${studentData.rooms?.room_number ?? 'N/A'}`, 14, 43)
-    doc.text(`Bed: ${studentData.beds?.bed_number ?? 'N/A'}`, 14, 51)
-    doc.text(`Admission Date: ${studentData.joining_date ? new Date(studentData.joining_date).toLocaleDateString('en-IN') : ''}`, 14, 59)
-    doc.text('Fee Terms:', 14, 70)
-    doc.text(`- Monthly Fee: ₹${studentData.rooms?.monthly_fee ?? 'N/A'}`, 18, 78)
-    doc.text(`- Payment Due: 5th of every month`, 18, 86)
-    doc.text('Hostel Rules:', 14, 98)
-    doc.text(`1. Maintain discipline and cleanliness.`, 18, 106)
-    doc.text(`2. No guests allowed without permission.`, 18, 114)
-    doc.text(`3. Fees must be paid on time.`, 18, 122)
-    doc.text(`4. Any damage to property will be charged.`, 18, 130)
-    doc.text(`5. Management reserves the right to admission/cancellation.`, 18, 138)
-    doc.text('Signature (Student): ____________________', 14, 155)
-    doc.text('Signature (Warden): _____________________', 14, 163)
-    doc.save(`admission-agreement-${studentData.full_name}.pdf`)
+    toast.info('PDF download feature coming soon')
   }
 
   if (!studentData) return null

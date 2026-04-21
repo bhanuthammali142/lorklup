@@ -1,8 +1,8 @@
 -- HostelOS MySQL Database Schema
 -- Run this once to setup all tables
 
-CREATE DATABASE IF NOT EXISTS hostel_db;
-USE hostel_db;
+CREATE DATABASE IF NOT EXISTS hostel_management;
+USE hostel_management;
 
 -- ─── USERS ──────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS users (

@@ -11,7 +11,7 @@ import {
   Sparkles, TrendingUp, ChevronRight
 } from 'lucide-react'
 import { useAuth } from '../../lib/AuthContext'
-import { supabase } from '../../lib/supabase'
+
 
 function fmt(n: number) {
   if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`

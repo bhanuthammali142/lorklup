@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Lock, Eye, EyeOff, Loader2, CheckCircle2 } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { apiAuth } from '../lib/api-client'
 import toast from 'react-hot-toast'
 
 /**
@@ -27,14 +27,7 @@ export function ChangePasswordPrompt({ onComplete }: { onComplete: () => void })
 
     setSaving(true)
     try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword })
-      if (error) throw error
-
-      // Update metadata to mark password as changed
-      await supabase.auth.updateUser({
-        data: { needs_password_change: false },
-      })
-
+      await apiAuth.changePassword(newPassword)
       toast.success('Password updated successfully!')
       onComplete()
     } catch (err: any) {

@@ -8,8 +8,6 @@ import { useAuth } from '../lib/AuthContext'
 import { getOrCreateHostel, getFees, processPayment, autoMarkOverdue, generateBulkFees } from '../lib/api'
 import type { Fee } from '../types'
 import toast from 'react-hot-toast'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
 
 function fmt(n: number) {
   return `₹${n.toLocaleString('en-IN')}`
@@ -111,24 +109,8 @@ export function Fees() {
   }
 
   const generatePDF = (fee: Fee) => {
-    const doc = new jsPDF()
-    doc.setFontSize(18)
-    doc.text('Fee Receipt', 14, 22)
-    doc.setFontSize(11)
-    doc.text(`Receipt ID: ${fee.receipt_id ?? 'N/A'}`, 14, 35)
-    doc.text(`Collection Date: ${fee.paid_at ? new Date(fee.paid_at).toLocaleDateString('en-IN') : ''}`, 14, 43)
-    autoTable(doc, {
-      startY: 55,
-      head: [['Field', 'Details']],
-      body: [
-        ['Student', fee.students?.full_name ?? ''],
-        ['Room', fee.students?.rooms?.room_number ?? 'N/A'],
-        ['Month', new Date(fee.month).toLocaleString('default', { month: 'short', year: 'numeric' })],
-        ['Amount Paid', fmt(Number(fee.amount))],
-        ['Status', fee.status.toUpperCase()],
-      ],
-    })
-    doc.save(`receipt-${fee.receipt_id}.pdf`)
+    // PDF generation removed - can be added back with jspdf if needed
+    toast.info('PDF download feature coming soon')
   }
 
   const filtered = feesData

@@ -2,7 +2,7 @@
  * adminApi.ts — MySQL backend version
  * Replaces Supabase Edge Function calls with REST API calls.
  */
-import { apiHostels, apiStudents } from './api-client'
+import { apiHostels } from './api-client'
 
 export async function createHostelWithOwner(payload: {
   ownerEmail: string
@@ -28,12 +28,7 @@ export async function createHostelWithOwner(payload: {
   })
 }
 
-export async function createStudentAuthAccount(payload: {
-  email?: string
-  phone?: string
-  full_name?: string
-  hostel_id?: string
-}) {
+export async function createStudentAuthAccount() {
   // With MySQL backend, student account creation is handled inside addStudent
   // This function is a no-op shim for backward compatibility
   return { user_id: null, credentials: null }

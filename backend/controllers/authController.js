@@ -116,4 +116,20 @@ async function me(req, res) {
   }
 }
 
-module.exports = { login, register, me }
+async function changePassword(req, res) {
+  const { newPassword } = req.body
+  if (!newPassword || newPassword.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters' })
+  }
+
+  try {
+    const hash = await bcrypt.hash(newPassword, 10)
+    await pool.query('UPDATE users SET password_hash = ? WHERE id = ?', [hash, req.user.id])
+    res.json({ message: 'Password updated successfully' })
+  } catch (err) {
+    console.error('[changePassword]', err)
+    res.status(500).json({ error: 'Failed to update password' })
+  }
+}
+
+module.exports = { login, register, me, changePassword }

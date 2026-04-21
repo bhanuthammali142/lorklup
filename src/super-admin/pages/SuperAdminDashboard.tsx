@@ -1,164 +1,75 @@
 // @ts-nocheck
-/**
- * SuperAdminDashboard.tsx
- * Changed: uses supabase (anon, RLS-controlled via super_admin policies) instead of supabaseAdmin
- */
 import React, { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Building2, CreditCard, Users, TrendingUp, ShieldAlert, CheckCircle2 } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
-
-function fmt(n: number) {
-  if (n >= 100000) return `₹${(n / 100000).toFixed(1)}L`
-  if (n >= 1000) return `₹${(n / 1000).toFixed(1)}K`
-  return `₹${n}`
-}
+import { useQuery } from '@tanstack/react-query'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { Loader2, Building2, Users, DollarSign } from 'lucide-react'
+import { useAuth } from '../../lib/AuthContext'
+import { apiHostels, apiStudents } from '../../lib/api-client'
+import toast from 'react-hot-toast'
 
 export function SuperAdminDashboard() {
-  const navigate = useNavigate()
-  const [stats, setStats] = useState({
-    totalHostels: 0,
-    activeStudents: 0,
-    platformRevenue: 0,
-    openTickets: 0,
-  })
-  const [loading, setLoading] = useState(true)
-  const [recentHostels, setRecentHostels] = useState<any[]>([])
+  const { user } = useAuth()
 
-  useEffect(() => {
-    const loadData = async () => {
-      const [hostelsRes, studentsRes] = await Promise.all([
-        supabase.from('hostels').select('*', { count: 'exact' }),
-        supabase.from('students').select('*', { count: 'exact', head: true }),
-      ])
-
-      let openTickets = 0
+  const { data: stats = {}, isLoading } = useQuery({
+    queryKey: ['super-admin-stats'],
+    queryFn: async () => {
       try {
-        const { count } = await supabase
-          .from('platform_tickets')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'open')
-        openTickets = count || 0
-      } catch (_) {}
+        const hostels = await apiHostels.getAll()
+        const students = await apiStudents.getAll('')
+        return {
+          hostels_count: hostels?.length || 0,
+          students_count: students?.length || 0,
+          revenue: 0,
+        }
+      } catch (err) {
+        toast.error('Failed to load statistics')
+        return { hostels_count: 0, students_count: 0, revenue: 0 }
+      }
+    },
+  })
 
-      const hostels = hostelsRes.data || []
-      setStats({
-        totalHostels: hostelsRes.count || 0,
-        activeStudents: studentsRes.count || 0,
-        platformRevenue: (hostelsRes.count || 0) * 5000,
-        openTickets,
-      })
-      setRecentHostels(
-        hostels
-          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-          .slice(0, 5)
-      )
-      setLoading(false)
-    }
-    loadData()
-  }, [])
+  if (!user || user.role !== 'super_admin') {
+    return <div className="p-8 text-center text-slate-600">Access denied</div>
+  }
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center p-8"><Loader2 className="animate-spin" /></div>
+  }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-500">
       <div>
-        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Platform command center</h1>
-        <p className="text-slate-500 mt-1 font-medium">Monitor and manage all HostelOS tenants from one dashboard.</p>
+        <h1 className="text-4xl font-bold text-slate-900">Super Admin Dashboard</h1>
+        <p className="text-slate-600 mt-2">System-wide overview and management</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: 'Active hostels', value: stats.totalHostels, icon: Building2, color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100' },
-          { label: 'Total students', value: stats.activeStudents, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100' },
-          { label: 'Monthly MRR', value: fmt(stats.platformRevenue), icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
-          { label: 'Support tickets', value: stats.openTickets, icon: ShieldAlert, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-100' },
-        ].map((stat, i) => {
-          const Icon = stat.icon
-          return (
-            <div key={i} className={`bg-white rounded-2xl p-5 border ${stat.border} shadow-sm relative overflow-hidden group`}>
-              <div className={`h-10 w-10 rounded-xl ${stat.bg} flex items-center justify-center mb-4`}>
-                <Icon className={`h-5 w-5 ${stat.color}`} />
-              </div>
-              <p className="text-sm font-bold text-slate-400 uppercase tracking-wider">{stat.label}</p>
-              <p className={`text-3xl font-black text-slate-900 mt-1 ${loading ? 'animate-pulse text-slate-200' : ''}`}>
-                {loading ? '...' : stat.value}
-              </p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+          <div className="flex items-center gap-4">
+            <Building2 className="h-10 w-10 text-blue-600" />
+            <div>
+              <p className="text-sm text-slate-600">Hostels</p>
+              <p className="text-3xl font-bold text-slate-900">{stats.hostels_count}</p>
             </div>
-          )
-        })}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-            <h3 className="font-bold text-slate-900 flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-indigo-500" /> Recently onboarded hostels
-            </h3>
-            <button onClick={() => navigate('/superadmin/hostels')} className="text-xs font-bold text-indigo-600 hover:text-indigo-700">View all</button>
           </div>
-          {loading ? (
-            <div className="p-6 space-y-4">
-              {[1, 2, 3].map(i => <div key={i} className="h-12 bg-slate-100 rounded-xl animate-pulse" />)}
-            </div>
-          ) : recentHostels.length === 0 ? (
-            <div className="p-12 text-center text-slate-400">
-              <Building2 className="h-10 w-10 mx-auto mb-3 opacity-20" />
-              <p className="font-medium">No hostels onboarded yet.</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {recentHostels.map(hostel => (
-                <div key={hostel.id} className="p-4 hover:bg-slate-50 transition flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="h-9 w-9 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center text-white font-black text-sm shrink-0">
-                      {hostel.name?.charAt(0) || '?'}
-                    </div>
-                    <div>
-                      <p className="font-bold text-slate-900">{hostel.name}</p>
-                      <p className="text-[10px] text-slate-400 font-mono mt-0.5">ID: {hostel.id?.substring(0, 8)}...</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-600 text-[10px] font-bold px-2 py-1 rounded-full">
-                      <CheckCircle2 className="h-3 w-3" /> Active
-                    </span>
-                    <p className="text-[10px] text-slate-400 mt-1 font-medium">{new Date(hostel.created_at).toLocaleDateString()}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
 
-        <div className="bg-slate-900 rounded-2xl shadow-xl overflow-hidden relative border border-slate-800">
-          <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/20 rounded-full blur-[50px]" />
-          <div className="p-6 relative z-10">
-            <h3 className="font-bold text-white mb-6 flex items-center gap-2">
-              <CreditCard className="h-4 w-4 text-indigo-400" /> Subscription health
-            </h3>
-            <div className="space-y-5">
-              <div>
-                <div className="flex justify-between text-xs font-bold text-slate-300 mb-1.5 uppercase tracking-wider">
-                  <span>Active subscriptions</span>
-                  <span className="text-white">{loading ? '...' : stats.totalHostels}</span>
-                </div>
-                <div className="h-2.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: '90%' }} />
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-xs font-bold text-slate-300 mb-1.5 uppercase tracking-wider">
-                  <span>Trialing</span><span className="text-white">0</span>
-                </div>
-                <div className="h-2.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-amber-500 rounded-full" style={{ width: '10%' }} />
-                </div>
-              </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+          <div className="flex items-center gap-4">
+            <Users className="h-10 w-10 text-emerald-600" />
+            <div>
+              <p className="text-sm text-slate-600">Students</p>
+              <p className="text-3xl font-bold text-slate-900">{stats.students_count}</p>
             </div>
-            <div className="mt-8 pt-6 border-t border-slate-800">
-              <button onClick={() => navigate('/superadmin/subscriptions')}
-                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition">
-                Manage billing plans
-              </button>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+          <div className="flex items-center gap-4">
+            <DollarSign className="h-10 w-10 text-amber-600" />
+            <div>
+              <p className="text-sm text-slate-600">Revenue</p>
+              <p className="text-3xl font-bold text-slate-900">₹0</p>
             </div>
           </div>
         </div>

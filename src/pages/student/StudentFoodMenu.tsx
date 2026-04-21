@@ -7,7 +7,7 @@
 import React, { useEffect, useState } from 'react'
 import { UtensilsCrossed, ChevronLeft, ChevronRight, Leaf, Flame, Sun, Sunset, Moon } from 'lucide-react'
 import { useAuth } from '../../lib/AuthContext'
-import { supabase } from '../../lib/supabase'
+
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
