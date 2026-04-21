@@ -112,7 +112,6 @@ export function AddHostelModal({
 
   const handleSubmit = async () => {
     setSubmitting(true)
-    setDeployError(false)
     try {
       const result = await createHostelWithOwner({
         ownerEmail,
@@ -133,11 +132,7 @@ export function AddHostelModal({
       })
       toast.success(`Hostel "${hostelName}" created!`)
     } catch (err: any) {
-      if (err.message?.includes('Edge Function not deployed') || err.message?.includes('not deployed')) {
-        setDeployError(true)
-      } else {
-        toast.error(err.message || 'Failed to create hostel')
-      }
+      toast.error(err.message || 'Failed to create hostel')
     } finally {
       setSubmitting(false)
     }

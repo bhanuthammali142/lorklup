@@ -1,241 +1,73 @@
 // @ts-nocheck
 /**
- * api.ts
- *
- * Changes from original:
- * 1. Removed all supabaseAdmin imports — use adminApi.ts for privileged ops
- * 2. addStudent() now calls createStudentAuthAccount() Edge Function
- * 3. Fixed fee month deduplication — uses DATE_TRUNC comparison, not JS string
- * 4. All queries rely on RLS for tenant isolation (no client-passed hostel_id trust)
- * 5. generateBulkFees() normalises month to first-of-month UTC to avoid timezone dupes
+ * api.ts — MySQL backend version
+ * All Supabase calls have been replaced with REST API calls via api-client.ts
  */
 
-import { supabase } from './supabase'
-import { createStudentAuthAccount } from './adminApi'
-import type { Hostel, Student, Fee } from '../types'
+import {
+  apiStudents, apiRooms, apiFees, apiDashboard,
+  apiComplaints, apiAnnouncements, apiAttendance, apiFoodMenu
+} from './api-client'
 
-// ─── HOSTEL ─────────────────────────────────────────────────────────────────
+// ─── HOSTEL ──────────────────────────────────────────────────────────────────
 
-export async function getOrCreateHostel(userId: string): Promise<Hostel | null> {
-  const { data, error } = await supabase
-    .from('hostels')
-    .select('*')
-    .eq('owner_id', userId)
-    .limit(1)
-    .single()
-
-  if (error && error.code === 'PGRST116') {
-    const { data: created } = await supabase
-      .from('hostels')
-      .insert({ owner_id: userId, name: 'My Hostel' })
-      .select()
-      .single()
-    return created
-  }
-  return data
+export async function getOrCreateHostel(userId: string, hostelId?: string) {
+  // With MySQL backend, hostel is fetched by the backend via token
+  const { apiHostels } = await import('./api-client')
+  const hostels = await apiHostels.getAll()
+  return hostels[0] || null
 }
 
-export async function updateHostel(hostelId: string, payload: Partial<Hostel>) {
-  const { error } = await supabase.from('hostels').update(payload).eq('id', hostelId)
-  if (error) throw error
+export async function updateHostel(hostelId: string, payload: any) {
+  const { apiHostels } = await import('./api-client')
+  return apiHostels.update(hostelId, payload)
 }
 
 // ─── STUDENTS ────────────────────────────────────────────────────────────────
 
-export async function getStudents(hostelId: string): Promise<Student[]> {
-  // RLS enforces that the caller owns this hostel — hostelId is a filter hint only
-  const { data, error } = await supabase
-    .from('students')
-    .select('*, rooms(room_number, monthly_fee), beds(bed_number)')
-    .eq('hostel_id', hostelId)
-    .order('created_at', { ascending: false })
-  if (error) { console.error(error); return [] }
-  return data ?? []
+export async function getStudents(hostelId: string) {
+  return apiStudents.getAll(hostelId)
 }
 
-export async function addStudent(
-  payload: Omit<Student, 'id' | 'created_at' | 'rooms' | 'beds' | 'user_id'> & { email?: string }
-) {
-  let userId: string | null = null
-  let credentials: { email: string; password: string; must_change: boolean } | null = null
-
-  // Create auth account via Edge Function (service key stays server-side)
-  if (payload.email || payload.phone) {
-    const result = await createStudentAuthAccount({
-      email: payload.email,
-      phone: payload.phone,
-      full_name: payload.full_name,
-      hostel_id: payload.hostel_id,
-    })
-    userId = result.user_id
-    credentials = result.credentials
-  }
-
-  // Insert student record (RLS verifies hostel ownership)
-  const { data, error } = await supabase
-    .from('students')
-    .insert({ ...payload, user_id: userId })
-    .select()
-    .single()
-  if (error) throw error
-
-  // Auto-create current month fee if room assigned
-  if (data?.room_id) {
-    const { data: room } = await supabase
-      .from('rooms')
-      .select('monthly_fee')
-      .eq('id', data.room_id)
-      .single()
-
-    if (room && Number(room.monthly_fee) > 0) {
-      const now = new Date()
-      // Normalise to UTC midnight to avoid timezone duplication
-      const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-        .toISOString().split('T')[0]
-      const dueDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 5))
-        .toISOString().split('T')[0]
-
-      await supabase.from('fees').insert({
-        hostel_id: payload.hostel_id,
-        student_id: data.id,
-        amount: room.monthly_fee,
-        due_amount: room.monthly_fee,
-        month: monthStart,
-        due_date: dueDate,
-        status: 'pending',
-      })
-    }
-
-    if (payload.bed_id) {
-      await supabase.from('beds').update({ status: 'occupied' }).eq('id', payload.bed_id)
-    }
-  }
-
-  return { student: data, credentials }
+export async function addStudent(payload: any) {
+  const result = await apiStudents.add(payload)
+  return { student: result.student, credentials: result.credentials }
 }
 
-export async function updateStudent(id: string, payload: Partial<Student>) {
-  const { error } = await supabase.from('students').update(payload).eq('id', id)
-  if (error) throw error
+export async function updateStudent(id: string, payload: any) {
+  return apiStudents.update(id, payload)
 }
 
 export async function deleteStudent(id: string) {
-  const { data: student } = await supabase
-    .from('students')
-    .select('bed_id')
-    .eq('id', id)
-    .single()
-  if (student?.bed_id) {
-    await supabase.from('beds').update({ status: 'available' }).eq('id', student.bed_id)
-  }
-  const { error } = await supabase.from('students').delete().eq('id', id)
-  if (error) throw error
-}
-
-// ─── PHOTO UPLOAD ─────────────────────────────────────────────────────────────
-
-export async function uploadStudentDoc(
-  hostelId: string,
-  studentId: string,
-  file: File,
-  type: 'aadhaar' | 'id_card'
-) {
-  const ext = file.name.split('.').pop()
-  const path = `${hostelId}/${studentId}/${type}.${ext}`
-  const { error } = await supabase.storage
-    .from('student-docs')
-    .upload(path, file, { upsert: true })
-  if (error) throw error
-
-  const { data: { publicUrl } } = supabase.storage
-    .from('student-docs')
-    .getPublicUrl(path)
-  return publicUrl
+  return apiStudents.delete(id)
 }
 
 // ─── ROOMS + BEDS ────────────────────────────────────────────────────────────
 
 export async function getRoomsWithBeds(hostelId: string) {
-  const { data, error } = await supabase
-    .from('rooms')
-    .select('*, beds(*, students(full_name))')
-    .eq('hostel_id', hostelId)
-    .order('room_number')
-  if (error) { console.error(error); return [] }
-  return data ?? []
-}
-
-export async function addRoom(payload: {
-  hostel_id: string
-  room_number: string
-  floor: string
-  capacity: number
-  type: 'AC' | 'Non-AC'
-  monthly_fee: number
-}) {
-  const { data: room, error } = await supabase.from('rooms').insert(payload).select().single()
-  if (error) throw error
-
-  const beds = Array.from({ length: payload.capacity }, (_, i) => ({
-    hostel_id: payload.hostel_id,
-    room_id: room.id,
-    bed_number: `B${i + 1}`,
-    status: 'available' as const,
+  const rooms = await apiRooms.getAll(hostelId)
+  return rooms.map((r: any) => ({
+    ...r,
+    beds: typeof r.beds === 'string' ? JSON.parse(r.beds) : (r.beds || []),
   }))
-  const { error: bedErr } = await supabase.from('beds').insert(beds)
-  if (bedErr) throw bedErr
-  return room
 }
 
-export async function updateRoom(
-  roomId: string,
-  payload: Partial<{ room_number: string; floor: string; capacity: number; type: 'AC' | 'Non-AC'; monthly_fee: number }>
-) {
-  const { error } = await supabase.from('rooms').update(payload).eq('id', roomId)
-  if (error) throw error
+export async function addRoom(payload: any) {
+  return apiRooms.add(payload)
+}
 
-  if (payload.capacity) {
-    const { data: beds } = await supabase
-      .from('beds')
-      .select('id, bed_number')
-      .eq('room_id', roomId)
-    const currentBeds = beds?.length || 0
-    if (payload.capacity > currentBeds) {
-      const room = await supabase.from('rooms').select('hostel_id').eq('id', roomId).single()
-      const newBeds = Array.from({ length: payload.capacity - currentBeds }, (_, i) => ({
-        hostel_id: room.data?.hostel_id,
-        room_id: roomId,
-        bed_number: `B${currentBeds + i + 1}`,
-        status: 'available' as const,
-      }))
-      await supabase.from('beds').insert(newBeds)
-    }
-  }
+export async function updateRoom(roomId: string, payload: any) {
+  return apiRooms.update(roomId, payload)
 }
 
 // ─── FEES ────────────────────────────────────────────────────────────────────
 
-export async function getFees(hostelId: string): Promise<Fee[]> {
-  const { data, error } = await supabase
-    .from('fees')
-    .select('*, students(full_name, rooms(room_number))')
-    .eq('hostel_id', hostelId)
-    .order('created_at', { ascending: false })
-  if (error) { console.error(error); return [] }
-  return data ?? []
+export async function getFees(hostelId: string) {
+  return apiFees.getAll(hostelId)
 }
 
-export async function addFeeRecord(payload: {
-  hostel_id: string
-  student_id: string
-  amount: number
-  month: string
-  due_date: string
-}) {
-  const { error } = await supabase
-    .from('fees')
-    .insert({ ...payload, due_amount: payload.amount, status: 'pending' })
-  if (error) throw error
+export async function addFeeRecord(payload: any) {
+  return apiFees.add(payload)
 }
 
 export async function processPayment(
@@ -248,113 +80,101 @@ export async function processPayment(
   paymentMethod: string,
   paidAtDate: string
 ) {
-  const newPaidAmount = currentPaid + amountPaid
-  const newDueAmount = totalAmount - newPaidAmount
-  let newStatus = 'pending'
-  if (newPaidAmount >= totalAmount) newStatus = 'paid'
-  else if (newPaidAmount > 0) newStatus = 'partial'
-
-  const receipt_id = `REC-${Date.now()}`
-
-  const { error: feeErr } = await supabase
-    .from('fees')
-    .update({
-      status: newStatus,
-      paid_amount: newPaidAmount,
-      due_amount: newDueAmount,
-      paid_at: newStatus === 'paid' ? new Date(paidAtDate).toISOString() : null,
-      receipt_id: newStatus === 'paid' ? receipt_id : null,
-    })
-    .eq('id', feeId)
-    .eq('hostel_id', hostelId)
-
-  if (feeErr) throw feeErr
-
-  const { error: payErr } = await supabase.from('payments').insert({
-    hostel_id: hostelId,
-    fee_id: feeId,
-    student_id: studentId,
-    amount: amountPaid,
+  const result = await apiFees.processPayment(feeId, {
+    amount_paid: amountPaid,
     payment_method: paymentMethod,
-    transaction_id: receipt_id,
-    created_at: new Date(paidAtDate).toISOString(),
+    paid_at: paidAtDate,
   })
-  if (payErr) throw payErr
-  return { receipt_id, newStatus }
+  return { receipt_id: result.receipt_id, newStatus: result.status }
 }
 
 export async function autoMarkOverdue(hostelId: string) {
-  const today = new Date().toISOString().split('T')[0]
-  const { error } = await supabase
-    .from('fees')
-    .update({ status: 'overdue' })
-    .eq('hostel_id', hostelId)
-    .eq('status', 'pending')
-    .lt('due_date', today)
-  if (error) throw error
+  return apiFees.markOverdue(hostelId)
 }
 
-export async function generateBulkFees(
-  hostelId: string,
-  monthDate: string,
-  dueDate: string
-) {
-  // Normalise monthDate to UTC first-of-month to prevent timezone-based duplication
-  const parsedMonth = new Date(monthDate)
-  const normalisedMonth = new Date(
-    Date.UTC(parsedMonth.getFullYear(), parsedMonth.getMonth(), 1)
-  ).toISOString().split('T')[0]
-
-  const { data: students } = await supabase
-    .from('students')
-    .select('id, rooms!inner(monthly_fee)')
-    .eq('hostel_id', hostelId)
-    .not('room_id', 'is', null)
-
-  if (!students || students.length === 0) return { created: 0 }
-
-  // Use date_trunc comparison on the server side to handle any existing timezone variants
-  const { data: existingFees } = await supabase
-    .from('fees')
-    .select('student_id')
-    .eq('hostel_id', hostelId)
-    .gte('month', normalisedMonth)
-    .lt('month', new Date(Date.UTC(
-      new Date(normalisedMonth).getUTCFullYear(),
-      new Date(normalisedMonth).getUTCMonth() + 1,
-      1
-    )).toISOString().split('T')[0])
-
-  const existingStudentIds = new Set(existingFees?.map(f => f.student_id) || [])
-
-  const feesToCreate = students
-    .filter(s => !existingStudentIds.has(s.id) && s.rooms && Number((s.rooms as any).monthly_fee) > 0)
-    .map(s => ({
-      hostel_id: hostelId,
-      student_id: s.id,
-      amount: Number((s.rooms as any).monthly_fee),
-      due_amount: Number((s.rooms as any).monthly_fee),
-      month: normalisedMonth,
-      due_date: dueDate,
-      status: 'pending',
-    }))
-
-  if (feesToCreate.length === 0) return { created: 0 }
-
-  const { error } = await supabase.from('fees').insert(feesToCreate)
-  if (error) throw error
-  return { created: feesToCreate.length }
+export async function generateBulkFees(hostelId: string, monthDate: string, dueDate: string) {
+  return apiFees.generateBulk({ hostel_id: hostelId, month: monthDate, due_date: dueDate })
 }
 
-// ─── EXPORT ──────────────────────────────────────────────────────────────────
+// ─── DASHBOARD STATS ─────────────────────────────────────────────────────────
 
-export function exportStudentsCSV(students: Student[]) {
+export async function getDashboardStats(hostelId: string) {
+  return apiDashboard.getStats(hostelId)
+}
+
+// ─── ANALYTICS ────────────────────────────────────────────────────────────────
+
+export async function getRevenueByMonth(hostelId: string) {
+  return apiDashboard.getRevenue(hostelId)
+}
+
+export async function getOccupancyByMonth(hostelId: string) {
+  // Derive from dashboard stats
+  const stats = await apiDashboard.getStats(hostelId)
+  const rate = stats.totalBeds > 0 ? Math.round((stats.occupiedBeds / stats.totalBeds) * 100) : 0
+  const months = ['Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan']
+  return months.map(name => ({ name, value: rate }))
+}
+
+// ─── COMPLAINTS ───────────────────────────────────────────────────────────────
+
+export async function getComplaints(hostelId: string) {
+  return apiComplaints.getAll(hostelId)
+}
+
+export async function updateComplaintStatus(id: string, payload: any) {
+  return apiComplaints.update(id, payload)
+}
+
+// ─── ANNOUNCEMENTS ────────────────────────────────────────────────────────────
+
+export async function getAnnouncements(hostelId: string) {
+  return apiAnnouncements.getAll(hostelId)
+}
+
+export async function addAnnouncement(payload: any) {
+  return apiAnnouncements.add(payload)
+}
+
+export async function deleteAnnouncement(id: string) {
+  return apiAnnouncements.delete(id)
+}
+
+// ─── ATTENDANCE ───────────────────────────────────────────────────────────────
+
+export async function getAttendanceByDate(hostelId: string, date: string) {
+  const rows = await apiAttendance.get(hostelId, date)
+  return rows.map((r: any) => ({
+    ...r,
+    rooms: { room_number: r.room_number },
+    attendance: r.attendance_status ? [{ status: r.attendance_status }] : [],
+  }))
+}
+
+export async function markAttendance(hostelId: string, studentId: string, date: string, status: string) {
+  return apiAttendance.mark({ hostel_id: hostelId, student_id: studentId, date, status })
+}
+
+// ─── FOOD MENU ────────────────────────────────────────────────────────────────
+
+export async function getFoodMenu(hostelId: string) {
+  const result = await apiFoodMenu.get(hostelId)
+  return result.menu
+}
+
+export async function saveFoodMenu(hostelId: string, menu: any) {
+  return apiFoodMenu.save(hostelId, menu)
+}
+
+// ─── CSV EXPORT ───────────────────────────────────────────────────────────────
+
+export function exportStudentsCSV(students: any[]) {
   const headers = ['Name', 'ID Number', 'College', 'Branch', 'Phone', 'Parent Phone', 'Room', 'Bed', 'Joining Date', 'Verified']
   const rows = students.map(s => [
     s.full_name, s.id_number ?? '', s.college_name ?? '', s.branch ?? '',
     s.phone, s.parent_phone ?? '',
-    (s as any).rooms?.room_number ?? 'Unassigned',
-    (s as any).beds?.bed_number ?? '',
+    s.room_number ?? 'Unassigned',
+    s.bed_number ?? '',
     s.joining_date, s.is_verified ? 'Yes' : 'No',
   ])
   const csv = [headers, ...rows]
@@ -363,178 +183,6 @@ export function exportStudentsCSV(students: Student[]) {
   const blob = new Blob([csv], { type: 'text/csv' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
-  a.href = url
-  a.download = `students_export_${Date.now()}.csv`
-  a.click()
+  a.href = url; a.download = `students_export_${Date.now()}.csv`; a.click()
   URL.revokeObjectURL(url)
-}
-
-// ─── DASHBOARD STATS ─────────────────────────────────────────────────────────
-
-export async function getDashboardStats(hostelId: string) {
-  const now = new Date()
-  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-    .toISOString().split('T')[0]
-  const monthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0))
-    .toISOString().split('T')[0]
-
-  const [{ count: students }, { data: beds }, { data: fees }] = await Promise.all([
-    supabase.from('students').select('*', { count: 'exact', head: true }).eq('hostel_id', hostelId),
-    supabase.from('beds').select('status').eq('hostel_id', hostelId),
-    supabase.from('fees').select('amount,status,month').eq('hostel_id', hostelId)
-      .gte('month', monthStart).lte('month', monthEnd),
-  ])
-
-  const totalBeds = beds?.length ?? 0
-  const occupiedBeds = beds?.filter(b => b.status === 'occupied').length ?? 0
-  const monthlyRevenue = fees?.filter(f => f.status === 'paid')
-    .reduce((s, f) => s + Number(f.amount), 0) ?? 0
-  const pendingFees = fees?.filter(f => f.status === 'pending')
-    .reduce((s, f) => s + Number(f.amount), 0) ?? 0
-  const overdueFees = fees?.filter(f => f.status === 'overdue')
-    .reduce((s, f) => s + Number(f.amount), 0) ?? 0
-
-  return { totalStudents: students ?? 0, totalBeds, occupiedBeds, monthlyRevenue, pendingFees, overdueFees }
-}
-
-// ─── ANALYTICS ────────────────────────────────────────────────────────────────
-
-export async function getRevenueByMonth(hostelId: string) {
-  const { data, error } = await supabase
-    .from('fees')
-    .select('amount, month, status')
-    .eq('hostel_id', hostelId)
-    .eq('status', 'paid')
-    .order('month')
-  if (error) return []
-  const grouped: Record<string, number> = {}
-  for (const row of data ?? []) {
-    const label = new Date(row.month).toLocaleString('default', { month: 'short', year: '2-digit' })
-    grouped[label] = (grouped[label] ?? 0) + Number(row.amount)
-  }
-  return Object.entries(grouped).map(([name, amount]) => ({ name, amount }))
-}
-
-export async function getOccupancyByMonth(hostelId: string) {
-  // Real occupancy snapshots — falls back to current rate for all months if no history
-  const { data: beds } = await supabase.from('beds').select('status').eq('hostel_id', hostelId)
-  const total = beds?.length ?? 0
-  const occupied = beds?.filter(b => b.status === 'occupied').length ?? 0
-  const rate = total > 0 ? Math.round((occupied / total) * 100) : 0
-
-  // Try to get real historical snapshots
-  const { data: snapshots } = await supabase
-    .from('occupancy_snapshots')
-    .select('month, rate')
-    .eq('hostel_id', hostelId)
-    .order('month', { ascending: false })
-    .limit(6)
-
-  if (snapshots && snapshots.length > 0) {
-    return snapshots
-      .reverse()
-      .map(s => ({
-        name: new Date(s.month).toLocaleString('default', { month: 'short' }),
-        value: Math.round(s.rate),
-      }))
-  }
-
-  // Fallback: current occupancy rate repeated for last 6 months
-  const months = ['Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan']
-  return months.map(name => ({ name, value: rate }))
-}
-
-// ─── COMPLAINTS ───────────────────────────────────────────────────────────────
-
-export async function getComplaints(hostelId: string) {
-  const { data, error } = await supabase
-    .from('complaints')
-    .select('*, students(full_name, rooms(room_number))')
-    .eq('hostel_id', hostelId)
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  return data ?? []
-}
-
-export async function updateComplaintStatus(
-  id: string,
-  payload: { status?: string; priority?: string }
-) {
-  const { error } = await supabase
-    .from('complaints')
-    .update({ ...payload, updated_at: new Date().toISOString() })
-    .eq('id', id)
-  if (error) throw error
-}
-
-// ─── ANNOUNCEMENTS ────────────────────────────────────────────────────────────
-
-export async function getAnnouncements(hostelId: string) {
-  const { data, error } = await supabase
-    .from('announcements')
-    .select('*')
-    .eq('hostel_id', hostelId)
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  return data ?? []
-}
-
-export async function addAnnouncement(payload: {
-  hostel_id: string
-  title: string
-  message: string
-}) {
-  const { error } = await supabase.from('announcements').insert(payload)
-  if (error) throw error
-}
-
-export async function deleteAnnouncement(id: string) {
-  const { error } = await supabase.from('announcements').delete().eq('id', id)
-  if (error) throw error
-}
-
-// ─── ATTENDANCE ───────────────────────────────────────────────────────────────
-
-export async function getAttendanceByDate(hostelId: string, date: string) {
-  const { data: students, error: studentErr } = await supabase
-    .from('students')
-    .select('id, full_name, rooms(room_number), attendance(status)')
-    .eq('hostel_id', hostelId)
-    .eq('attendance.date', date)
-  if (studentErr) throw studentErr
-  return students ?? []
-}
-
-export async function markAttendance(
-  hostelId: string,
-  studentId: string,
-  date: string,
-  status: 'present' | 'absent' | 'leave'
-) {
-  const { error } = await supabase
-    .from('attendance')
-    .upsert(
-      { hostel_id: hostelId, student_id: studentId, date, status },
-      { onConflict: 'student_id, date' }
-    )
-  if (error) throw error
-}
-
-// ─── FOOD MENU ────────────────────────────────────────────────────────────────
-
-export async function getFoodMenu(hostelId: string) {
-  const { data, error } = await supabase
-    .from('food_menus')
-    .select('menu')
-    .eq('hostel_id', hostelId)
-    .maybeSingle()
-  if (error) throw error
-  return data?.menu ?? null
-}
-
-export async function saveFoodMenu(hostelId: string, menu: Record<string, unknown>) {
-  const { error } = await supabase
-    .from('food_menus')
-    .upsert({ hostel_id: hostelId, menu, updated_at: new Date().toISOString() })
-  if (error) throw error
 }

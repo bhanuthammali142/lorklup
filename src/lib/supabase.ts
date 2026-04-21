@@ -1,27 +1,16 @@
 /**
- * supabase.ts
- *
- * ONLY the anon key lives here. The service role key has been removed from the
- * frontend entirely. All privileged operations now go through the Edge Function
- * via src/lib/adminApi.ts.
- *
- * If you see `supabaseAdmin` imported from this file anywhere in the codebase,
- * replace it with the appropriate function from src/lib/adminApi.ts.
+ * supabase.ts — DISABLED
+ * Supabase has been removed. This file is kept to prevent import errors
+ * from any file that might still reference it during the transition.
+ * All actual API calls now go through src/lib/api-client.ts
  */
 
-import { createClient } from '@supabase/supabase-js'
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    'Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY in environment. ' +
-    'Copy .env.example to .env.local and fill in your values.'
-  )
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
-// supabaseAdmin has been intentionally removed.
-// Use src/lib/adminApi.ts for any privileged operations.
+// Null stub — any code that still imports supabase will get a clear error
+export const supabase = new Proxy({} as any, {
+  get(_target, prop) {
+    throw new Error(
+      `[Supabase REMOVED] You are calling supabase.${String(prop)}() but Supabase has been replaced with the MySQL REST API. ` +
+      `Use functions from src/lib/api-client.ts or src/lib/api.ts instead.`
+    )
+  }
+})

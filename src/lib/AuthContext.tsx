@@ -1,238 +1,71 @@
-// src/lib/AuthContext.tsx
-// Changed: removed supabaseAdmin — all role resolution uses the anon client (RLS enforced)
+/**
+ * AuthContext.tsx — MySQL/JWT-based auth (Supabase removed completely)
+ */
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import type { Session, User } from '@supabase/supabase-js'
-import { supabase } from './supabase'
+import {
+  apiAuth, getToken, setToken, clearToken,
+  getStoredUser, setStoredUser, type ApiUser
+} from './api-client'
 
 interface AuthContextType {
-  session: Session | null
-  user: User | null
+  user: ApiUser | null
   role: 'super_admin' | 'admin' | 'student' | null
-  studentData: any | null
-  signOut: () => Promise<void>
+  hostelId: string | null
+  signOut: () => void
   loading: boolean
+  // Legacy compat (pages use user.id, user.email)
+  session: any
+  studentData: any
 }
 
 const AuthContext = createContext<AuthContextType>({
-  session: null,
   user: null,
   role: null,
-  studentData: null,
-  signOut: async () => {},
+  hostelId: null,
+  signOut: () => {},
   loading: true,
+  session: null,
+  studentData: null,
 })
 
-async function resolveRoleFromProfile(
-  userId: string
-): Promise<'super_admin' | 'admin' | 'student' | null> {
-  const { data: userData } = await supabase.auth.getUser()
-  const email = userData.user?.email
-  const roleFromMetadata = userData.user?.user_metadata?.role
-
-  // ---- PLATFORM OWNER OVERRIDE ----
-  if (email === 'bhanuthammali2601@gmail.com' || email === 'admin@hostelos.com') {
-    // Write 'super_admin' to DB so RLS policies that check role = 'super_admin' work
-    await supabase.from('profiles').upsert({
-      id:    userId,
-      email: email ?? '',
-      role:  'super_admin',
-    })
-    return 'super_admin'
-  }
-
-  // Trust JWT metadata written at account creation
-  if (roleFromMetadata === 'student' || roleFromMetadata === 'admin') {
-    await supabase
-      .from('profiles')
-      .upsert({ id: userId, email: email || '', role: roleFromMetadata })
-    return roleFromMetadata
-  }
-
-  // Self-healing: if email is in students table, they are a student
-  if (email) {
-    const { data: studentMatch } = await supabase
-      .from('students')
-      .select('id')
-      .eq('email', email)
-      .maybeSingle()
-
-    if (studentMatch) {
-      await supabase
-        .from('profiles')
-        .upsert({ id: userId, email, role: 'student' })
-      return 'student'
-    }
-  }
-
-  // Check profiles table
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', userId)
-    .maybeSingle()
-
-  if (error) {
-    console.error('[AuthContext] profiles lookup failed:', error.message)
-    return null
-  }
-
-  if (data?.role === 'super_admin') return 'super_admin'
-  if (data?.role === 'admin') return 'admin'
-  if (data?.role === 'student') return 'student'
-
-  // No profile found — detect and write
-  return await detectAndWriteProfile(userId)
-}
-
-async function detectAndWriteProfile(userId: string): Promise<'super_admin' | 'admin' | 'student'> {
-  const { data: hostel } = await supabase
-    .from('hostels')
-    .select('id')
-    .eq('owner_id', userId)
-    .maybeSingle()
-
-  if (hostel) {
-    const { data: user } = await supabase.auth.getUser()
-    await supabase
-      .from('profiles')
-      .upsert({ id: userId, email: user.user?.email ?? '', role: 'admin' })
-    return 'admin'
-  }
-
-  const { data: userData } = await supabase.auth.getUser()
-  const currentEmail = userData.user?.email ?? ''
-
-  let studentQuery = supabase
-    .from('students')
-    .select('id, email, user_id')
-    .eq('user_id', userId)
-  if (currentEmail) {
-    studentQuery = supabase
-      .from('students')
-      .select('id, email, user_id')
-      .or(`user_id.eq.${userId},email.eq.${currentEmail}`)
-  }
-
-  const { data: student } = await studentQuery.maybeSingle()
-
-  if (student) {
-    await supabase
-      .from('profiles')
-      .upsert({ id: userId, email: currentEmail || student.email || '', role: 'student' })
-    if (!student.user_id) {
-      await supabase.from('students').update({ user_id: userId }).eq('id', student.id)
-    }
-    return 'student'
-  }
-
-  // If no hostel and no student record found, check if profiles already has a role
-  const { data: existingProfile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', userId)
-    .maybeSingle()
-
-  if (existingProfile?.role === 'super_admin') return 'super_admin'
-
-  console.warn('[AuthContext] No hostel/student record — writing admin profile for:', userId)
-  await supabase
-    .from('profiles')
-    .upsert({ id: userId, email: currentEmail, role: 'admin' })
-  return 'admin'
-}
-
-async function fetchStudentData(userId: string, email?: string) {
-  const { data: student } = await supabase
-    .from('students')
-    .select('*, rooms(room_number, floor, type), beds(bed_number)')
-    .eq('user_id', userId)
-    .maybeSingle()
-
-  if (student) return student
-
-  if (email) {
-    const { data: byEmail } = await supabase
-      .from('students')
-      .select('*, rooms(room_number, floor, type), beds(bed_number)')
-      .eq('email', email)
-      .maybeSingle()
-
-    if (byEmail) {
-      await supabase
-        .from('students')
-        .update({ user_id: userId })
-        .eq('id', byEmail.id)
-      return { ...byEmail, user_id: userId }
-    }
-  }
-
-  return null
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null)
-  const [user, setUser] = useState<User | null>(null)
-  const [role, setRole] = useState<'super_admin' | 'admin' | 'student' | null>(null)
-  const [studentData, setStudentData] = useState<any | null>(null)
+  const [user, setUser] = useState<ApiUser | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const checkRole = async (user: User | null) => {
-    if (!user) {
-      setRole(null)
-      setStudentData(null)
-      setLoading(false)
-      return
-    }
-
-    setLoading(true)
-    try {
-      const resolvedRole = await resolveRoleFromProfile(user.id)
-      setRole(resolvedRole)
-
-      if (resolvedRole === 'student') {
-        const data = await fetchStudentData(user.id, user.email)
-        setStudentData(data)
-      } else {
-        setStudentData(null)
-      }
-    } catch (err) {
-      console.error('[AuthContext] checkRole failed:', err)
-      setRole(null)
-      setStudentData(null)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      if (session?.user) checkRole(session.user)
-      else setLoading(false)
-    })
+    const token = getToken()
+    const stored = getStoredUser()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        checkRole(session.user)
-      } else {
-        setRole(null)
-        setStudentData(null)
-        setLoading(false)
-      }
-    })
-
-    return () => subscription.unsubscribe()
+    if (token && stored) {
+      setUser(stored)
+      // Refresh from server in background
+      apiAuth.me()
+        .then(fresh => { setUser(fresh); setStoredUser(fresh) })
+        .catch(() => { clearToken(); setUser(null) })
+        .finally(() => setLoading(false))
+    } else {
+      setLoading(false)
+    }
   }, [])
 
-  const signOut = async () => {
-    await supabase.auth.signOut()
+  const signOut = () => {
+    clearToken()
+    setUser(null)
+    window.location.href = '/auth'
+  }
+
+  const value: AuthContextType = {
+    user,
+    role: user?.role ?? null,
+    hostelId: user?.hostel_id ?? null,
+    signOut,
+    loading,
+    session: user ? { user } : null,   // legacy compat
+    studentData: null,
   }
 
   return (
-    <AuthContext.Provider value={{ session, user, role, studentData, signOut, loading }}>
+    <AuthContext.Provider value={value}>
       {loading ? (
         <div className="min-h-screen flex items-center justify-center bg-slate-50">
           <div className="flex flex-col items-center gap-4">
